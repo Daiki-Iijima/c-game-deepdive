@@ -2,6 +2,11 @@
 title: "第3章 — 蛇を連結リストで育てる: malloc / free / 二重 free と valgrind"
 ---
 
+:::message
+本連載で書くコード一式は **[GitHub: Daiki-Iijima/c-game-deepdive](https://github.com/Daiki-Iijima/c-game-deepdive)** にあります。本文中で `01_snake/step1_termios/main.c` のように参照する path はすべてそのリポ内のファイルです。
+:::
+
+
 ![demo placeholder](https://placehold.co/800x300?text=snake+v2+%28linked+list%29+%2B+food)
 
 ## つかみ

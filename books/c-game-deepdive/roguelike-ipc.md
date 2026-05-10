@@ -2,6 +2,11 @@
 title: "第9章 — モンスターを別プロセスで動かす: fork / pipe / dup2 / SIGCHLD"
 ---
 
+:::message
+本連載で書くコード一式は **[GitHub: Daiki-Iijima/c-game-deepdive](https://github.com/Daiki-Iijima/c-game-deepdive)** にあります。本文中で `01_snake/step1_termios/main.c` のように参照する path はすべてそのリポ内のファイルです。
+:::
+
+
 ![demo placeholder](https://placehold.co/800x300?text=parent+game+%2B+child+AI+via+pipes)
 
 ## つかみ

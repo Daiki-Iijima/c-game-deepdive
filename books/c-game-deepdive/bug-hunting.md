@@ -2,6 +2,11 @@
 title: "第11章 — gdb と valgrind 実戦: シリーズ中のバグを総ざらい"
 ---
 
+:::message
+本連載で書くコード一式は **[GitHub: Daiki-Iijima/c-game-deepdive](https://github.com/Daiki-Iijima/c-game-deepdive)** にあります。本文中で `01_snake/step1_termios/main.c` のように参照する path はすべてそのリポ内のファイルです。
+:::
+
+
 ![demo placeholder](https://placehold.co/800x300?text=gdb+session+%2B+valgrind+output)
 
 ## つかみ

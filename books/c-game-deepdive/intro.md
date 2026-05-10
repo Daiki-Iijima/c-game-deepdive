@@ -2,6 +2,11 @@
 title: "第0章 — 環境構築とゲームループ: なぜ Docker amd64 を踏むのか"
 ---
 
+:::message
+本連載で書くコード一式は **[GitHub: Daiki-Iijima/c-game-deepdive](https://github.com/Daiki-Iijima/c-game-deepdive)** にあります。本文中で `01_snake/step1_termios/main.c` のように参照する path はすべてそのリポ内のファイルです。
+:::
+
+
 ## つかみ
 
 「C のゲームを書くだけなら gcc 一発でいいじゃん」と思うかもしれません。
