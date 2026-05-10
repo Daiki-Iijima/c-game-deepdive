@@ -20,8 +20,17 @@
 #define ROWS 20
 
 /* 4x4 grid を行優先で 16-bit に詰める。
-   bit 順: (i,j) → bit (i*4 + j)。最上位 bit は使わない。
-   例: I 横 → row 1 が全部 1 → bits 4-7 が 1 → 0b0000_1111_0000_0000 = 0x00F0 */
+   bit 順: (i,j) → bit (i*4 + j)。 最上位 bit は使わない。
+   例: I 横 → row 1 が全部 1 → bits 4-7 が 1 → 0b0000_0000_1111_0000 = 0x00F0
+
+   C のビット表記:
+     0xF0   = 16進リテラル (= 11110000 = 240)
+     0b1010 = 2進リテラル (C23 標準。 gcc/clang は古くからの拡張で受け入れる)
+     `<<`, `>>` = 左/右シフト。 `(1 << n)` で「n bit 目だけが立った値」 を作れる
+     `&`        = ビット AND。 (x & mask) でマスクされたビットだけ残る
+     `|`        = ビット OR。 (x | (1<<n)) で n bit 目を立てる
+     `~`        = ビット NOT。 全 bit 反転
+     `^`        = ビット XOR */
 static const uint16_t PATTERNS[7][4] = {
     /* I */ { 0x00F0, 0x4444, 0x0F00, 0x2222 },
     /* O */ { 0x6600, 0x6600, 0x6600, 0x6600 },
@@ -32,6 +41,11 @@ static const uint16_t PATTERNS[7][4] = {
     /* L */ { 0x2E00, 0x4460, 0x0E80, 0xC440 },
 };
 
+/* BIT_AT(p, i, j):
+     16-bit パターン p の (i, j) 位置の bit を取り出す関数マクロ。
+     (i*4 + j) bit だけ右シフトしてから & 1u で最下位 bit だけ残す。
+     カッコ () を全引数に付けるのは演算子優先順位事故を防ぐマクロの定石。
+     1u は unsigned int リテラル (型推論を unsigned に揃えるため)。 */
 #define BIT_AT(p, i, j) (((p) >> ((i)*4 + (j))) & 1u)
 
 typedef struct PieceNode {
@@ -83,8 +97,16 @@ static void refill_bag(Queue *q) {
 static uint16_t shape_at(int kind, int rot) { return PATTERNS[kind][rot & 3]; }
 
 /* ----- 関数ポインタディスパッチ -----
-   「現在の回転状態 → 次の回転状態」を 4 通り用意し、
-   テーブルから引いて呼び出す。switch 文の代替として教材に。 */
+   「現在の回転状態 → 次の回転状態」 を 4 通り用意し、
+   テーブルから引いて呼び出す。 switch 文の代替として教材に。
+
+   関数ポインタ型の宣言:
+     int (*RotateFn)(int)
+       ↑    ↑          ↑
+       戻値型 ポインタ名  引数型 (列挙)
+     これは「int を 1 つ取って int を返す関数へのポインタ」 という型。
+     typedef を付けると型名 (RotateFn) として再利用できる。
+     呼び出すときは ROT_FN[idx](cur) のように関数として書ける (普通の関数と同じ構文)。 */
 typedef int (*RotateFn)(int cur);
 static int rot_cw  (int cur) { return (cur + 1) & 3; }
 static int rot_ccw (int cur) { return (cur + 3) & 3; }

@@ -27,12 +27,26 @@ typedef struct {
 
 typedef struct { int r, c; } Pt;
 
-/* signal handler から書ける唯一の安全な型は volatile sig_atomic_t */
+/* signal handler とメインスレッドの両方から触れる変数の型は厳密に決まっている:
+     `volatile sig_atomic_t` のみが規格保証。
+
+   volatile:
+     コンパイラに「この変数の値は外から (= signal/別スレッド/MMIO) 変わる可能性がある」
+     と伝える。 これを付けないと「ループ中で値が変わらない」 と勝手に判断され、
+     レジスタにキャッシュされて flag を見落とすことがある。
+
+   sig_atomic_t:
+     「途中で signal が割り込んでも一貫性が壊れない、 アトミックに read/write
+      できる整数型」 として処理系が定義する型 (通常は int)。 */
 static volatile sig_atomic_t g_resize_flag = 0;
 
+/* SIGWINCH ハンドラ:
+   端末ウィンドウサイズが変わった時にカーネルが投げてくる signal。
+   ハンドラの中で複雑な事はしない (= async-signal-safe な関数しか呼べない)。
+   flag を立てるだけにして、 メインループで安全に処理する。 */
 static void on_winch(int sig) {
-    (void)sig;
-    g_resize_flag = 1;   /* これしかしない。 read/write も呼ばない。 */
+    (void)sig;            /* 引数不使用警告抑制の定番 */
+    g_resize_flag = 1;    /* これしかしない。 read/write/malloc/printf も呼ばない */
 }
 
 static Map *map_new(int rows, int cols) {

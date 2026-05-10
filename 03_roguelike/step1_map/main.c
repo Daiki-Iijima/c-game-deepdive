@@ -17,13 +17,24 @@
 #include <time.h>
 #include <unistd.h>
 
-/* flexible array member: 構造体末尾に「サイズ未定の配列」を置ける C99 機能。
-   sizeof(Map) は tiles を含まない。 malloc(sizeof(Map) + rows*cols) で 1 個の
-   メモリブロックに収まるのが便利。 */
+/* flexible array member (C99 機能):
+   構造体末尾に「サイズ未定の配列」を置ける。 ルール:
+     - **構造体の最後のメンバ** でなければならない (中間には置けない)
+     - 配列要素数を書かない (`tiles[]` のように)
+     - sizeof(Map) は **tiles を含まない** ヘッダ部分だけ
+     - 確保は malloc(sizeof(Map) + 必要なバイト数) で 1 ブロック
+
+   メリット:
+     - ヘッダと本体を 1 個の malloc にまとめられる
+     - free も 1 回で済む
+     - キャッシュ局所性が高い (ヘッダの直後に本体が連続)
+
+   2 回 malloc (ヘッダだけ struct で、 tiles は別 malloc) に対する優位性は
+   第 7 章本文で詳細に。 */
 typedef struct {
     int  rows;
     int  cols;
-    char tiles[];      /* '.' = 床, '#' = 壁, '+' = ドア */
+    char tiles[];      /* '.' = 床, '#' = 壁, '+' = ドア (将来) */
 } Map;
 
 #define TILE(m, r, c) ((m)->tiles[(r) * (m)->cols + (c)])

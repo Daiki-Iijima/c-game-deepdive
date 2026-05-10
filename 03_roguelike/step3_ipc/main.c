@@ -1,15 +1,25 @@
 /*
- * 03_roguelike/step3_ipc/main.c — 第 9 章 (fork + pipe で AI 別プロセス)
+ * 03_roguelike/step3_ipc/main.c
+ * --------------------------------------------------------------------------
+ * 第 9 章 (fork + pipe で AI 別プロセス)
  *
  * 学習材料:
- *   - fork() で親子に分岐
- *   - pipe() を 2 本張って双方向通信 (parent→child: world snapshot / child→parent: move)
- *   - 子の stdin/stdout は pipe に dup2 で繋ぎ、 親は端末を独占
- *   - SIGCHLD で子の異常終了を検知し、 ゲームループは継続
- *   - メッセージは「行ベースのテキストプロトコル」(学習用に読みやすく)
+ *   - fork()      : 自分自身のクローンを作る syscall。 戻り値で親/子を識別
+ *   - pipe()      : カーネル内に「単方向のバイトの流れ」 を 1 本作る
+ *   - dup2()      : ファイルディスクリプタの番号を付け替える (= リダイレクト)
+ *   - waitpid()   : 子プロセスを reap (= 終了状態を回収) する
+ *   - SIGCHLD     : 子が死んだとき親に飛んでくる signal
  *
- * 本実装は学習用の最小骨格。 realistic に書くと数倍の行数になるが、
- * fork/pipe/dup2/SIGCHLD の流れを 1 ファイルで読み通せる事を優先。
+ * 構成:
+ *   parent ──── p2c[1] ──→ pipe ──→ p2c[0] ──── child stdin
+ *   parent ←── c2p[0] ←── pipe ←── c2p[1] ──── child stdout
+ *
+ * メッセージは行ベースのテキストプロトコル (学習用に読みやすく):
+ *   親→子: "tick <pr> <pc> <mr> <mc>\n"
+ *   子→親: "move <dr> <dc>\n"
+ *
+ * 本実装は学習用の最小骨格。 fork/pipe/dup2/SIGCHLD の流れを 1 ファイルで
+ * 読み通せる事を優先しているため、 本格的なエラー処理は端折ってある。
  */
 #include "tty.h"
 
@@ -32,9 +42,18 @@ static int      g_player_r = 1, g_player_c = 1;
 static int      g_monster_r = 0, g_monster_c = 0;
 static volatile sig_atomic_t g_child_dead = 0;
 
+/* SIGCHLD handler:
+   子プロセスの状態変化 (主に終了) を親が拾うための signal。
+   ハンドラ内では async-signal-safe な関数しか呼べないが、 waitpid は OK。
+
+   waitpid(pid, status, options):
+     pid = -1  : どの子でもいい (= 一番先に変化があった子)
+     status   : 終了状態を書き戻す先 (今回は使わない)
+     WNOHANG  : 「変化があれば返す、 無ければ即時 0」 のノンブロッキングモード
+   while で連続呼び出ししているのは、 同時に複数の子が死んだ場合に
+   1 回の signal で複数 reap するため (= シグナルは合成される)。 */
 static void on_sigchld(int sig) {
-    (void)sig;
-    /* WNOHANG で reap (handler 内では waitpid のみが async-signal-safe 認定) */
+    (void)sig;  /* 引数を使わない警告抑制の定番イディオム */
     int status;
     while (waitpid(-1, &status, WNOHANG) > 0) g_child_dead = 1;
 }
@@ -112,7 +131,13 @@ static void msleep(int ms) {
 int main(void) {
     map_init();
 
-    /* parent → child の pipe (p2c) と child → parent の pipe (c2p) */
+    /* pipe(int fd[2]):
+         カーネルにバッファを 1 個と、 そこを読み書きする 2 つの fd を作る。
+           fd[0] = 読み口 (read end)
+           fd[1] = 書き口 (write end)
+         pipe は **単方向**。 双方向通信したいなら 2 本作る必要がある。
+       p2c (parent → child): 親が書き、 子が読む
+       c2p (child  → parent): 子が書き、 親が読む */
     int p2c[2], c2p[2];
     if (pipe(p2c) == -1 || pipe(c2p) == -1) { perror("pipe"); return 1; }
 
@@ -122,17 +147,35 @@ int main(void) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGCHLD, &sa, NULL);
 
+    /* fork(): 呼び出したプロセスを **そっくり複製** する syscall。
+       戻り値で親/子を識別:
+         > 0  : 親側に返る。 値は子の PID
+         == 0 : 子側に返る (= 「自分は子だ」)
+         < 0  : 失敗 (リソース不足など)
+       fork 直後、 親と子は全く同じメモリ状態だが、 以降は別プロセスとして
+       独立に動く (Copy-on-Write でメモリは共有される → 書き込み時にコピー)。 */
     pid_t pid = fork();
     if (pid < 0) { perror("fork"); return 1; }
     if (pid == 0) {
-        /* 子: stdin = p2c[0], stdout = c2p[1]、 ttyは触らない */
-        dup2(p2c[0], STDIN_FILENO);
-        dup2(c2p[1], STDOUT_FILENO);
-        /* 全部閉じる (dup2 で残ったコピー以外は不要) */
+        /* === ここから子プロセス === */
+        /* dup2(oldfd, newfd):
+             newfd を一度 close してから、 oldfd の指す先を newfd に複製する。
+             ここで子の stdin (= fd 0) を pipe の読み口に、 stdout (= fd 1) を
+             pipe の書き口に、 すり替えている。 こうすると子の標準 I/O 関数
+             (fgets, printf, ...) が自動的に pipe と会話するようになる。 */
+        dup2(p2c[0], STDIN_FILENO);    /* 子の stdin ← parent → child の read 端 */
+        dup2(c2p[1], STDOUT_FILENO);   /* 子の stdout → child → parent の write 端 */
+        /* dup2 で番号 0/1 として残るので、 元の番号 (p2c[0] = 3 等) はもう不要。
+           pipe の全 fd を閉じる (リーク防止 + デッドロック防止)。 */
         close(p2c[0]); close(p2c[1]); close(c2p[0]); close(c2p[1]);
-        run_ai_child();   /* never returns */
+        run_ai_child();   /* 子はこの中で _exit(0) する。 ここには戻らない */
     }
-    /* 親: 使わない端を閉じる。 これを忘れると子が終わっても read が EOF にならない */
+    /* === ここから親プロセス === */
+    /* 親: 使わない端を閉じる (重要):
+         p2c[0] は子だけが読む側 → 親では不要
+         c2p[1] は子だけが書く側 → 親では不要
+       これを忘れると、 子が終わっても親側に書き口/読み口が残っていて
+       「自分自身に書き込めるから EOF が来ない」 という典型デッドロックになる。 */
     close(p2c[0]); close(c2p[1]);
 
     tty_raw_mode(); tty_hide_cursor();

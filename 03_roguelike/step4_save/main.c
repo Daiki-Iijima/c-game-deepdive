@@ -13,13 +13,24 @@
 #include <string.h>
 
 /* バイト順を host から little-endian へ・逆向きへ変換する関数を、
-   `<endian.h>` (Linux glibc 提供) に頼らず bytewise で書く。
-   理由: 「host のバイト順に依存しない」 を実装で示すこと自体が本章の教材。 */
+   `<endian.h>` (Linux glibc 提供の htole64 等) に頼らず bytewise で書く。
+   理由: 「host のバイト順に依存しない」 を実装で示すこと自体が本章の教材。
+
+   仕組み:
+     - v からシフトと AND で 1 byte ずつ取り出し
+     - r のメモリに 「最下位 byte が先頭」 の順で書き込む
+   こうして得た r をそのまま fwrite すれば、 host の endian に関わらず
+   ファイル中身は LE で固定される。
+
+   ポインタキャスト `(uint8_t *)&r`:
+     r のアドレスを取って uint8_t* として解釈し直す = 「r の中身に
+     byte 単位でアクセスする」 イディオム。 strict aliasing rule の例外として
+     char/uint8_t 越しの読み書きは規格上 OK (実装定義ではなく規格保証)。 */
 static uint16_t to_le16(uint16_t v) {
     uint16_t r;
     uint8_t *p = (uint8_t *)&r;
-    p[0] = (uint8_t)(v       & 0xFF);
-    p[1] = (uint8_t)((v >> 8) & 0xFF);
+    p[0] = (uint8_t)(v       & 0xFF);  /* 最下位 byte */
+    p[1] = (uint8_t)((v >> 8) & 0xFF); /* 次の byte */
     return r;
 }
 static uint64_t to_le64(uint64_t v) {
@@ -53,11 +64,24 @@ typedef struct {
 
 #define MAGIC "RGSV"   /* 4 bytes */
 
-/* バージョン 1: 構造体直書き = 罠版 */
+/* バージョン 1: 構造体直書き = 罠版
+
+   fopen(path, mode):
+     ファイルを開いて FILE* を返す高レベル I/O。 内部では open(2) syscall。
+     mode の意味:
+       "r"  = 読み込み専用
+       "w"  = 書き込み (既存内容は破棄)
+       "a"  = 追記
+       "b"  = バイナリモード (Windows でのみ意味あり。 Unix では無視)
+   fwrite(ptr, size, nmemb, fp):
+     ptr の指す領域から size バイトを nmemb 個分、 fp に書く。
+     戻り値は **実際に書き込めた nmemb の個数** (バイト数ではない)。 */
 static int save_naive(const Save *s, const char *path) {
     FILE *fp = fopen(path, "wb");
     if (!fp) { perror(path); return -1; }
     if (fwrite(MAGIC, 1, 4, fp) != 4) { fclose(fp); return -1; }
+    /* sizeof(*s) = Save 構造体全体のサイズ (= padding 込み)。
+       これを 1 個丸ごと書くと、 padding バイトもファイルに混ざる。 */
     if (fwrite(s, sizeof(*s), 1, fp) != 1) { fclose(fp); return -1; }
     fclose(fp);
     return 0;

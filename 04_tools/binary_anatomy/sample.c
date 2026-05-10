@@ -1,14 +1,25 @@
 /*
- * 04_tools/binary_anatomy/sample.c — 第 12 章 (バイナリ解剖の素材)
+ * 04_tools/binary_anatomy/sample.c
+ * --------------------------------------------------------------------------
+ * 第 12 章 (バイナリ解剖の素材)
  *
  * 関数ポインタ間接呼び出し / 単純ループ / 配列アクセスの 3 パターンを
  * 1 ファイルに置き、 readelf / objdump / perf の素材にする。
+ *
+ * 新登場の C 機能:
+ *   - __attribute__((noinline)): gcc/clang 拡張。 「この関数はインライン
+ *     展開しないでくれ」 とコンパイラに伝える。 -O2 で消えると逆アセンブル
+ *     できなくなるので、 解剖したい関数に明示的に付ける。
+ *   - strtoull: 文字列を unsigned long long に変換する (atoi/atol の上位)
+ *   - <stdint.h> の固定幅型: uint64_t を使い、 環境差をなくす
  */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+/* BinOp 型: 「int 2 つを取って int を返す関数」 へのポインタ型。
+   関数ポインタ配列 OPS[] にどの op_xxx を入れるかで挙動が決まる。 */
 typedef int (*BinOp)(int, int);
 static int op_add(int a, int b) { return a + b; }
 static int op_sub(int a, int b) { return a - b; }
@@ -16,9 +27,13 @@ static int op_mul(int a, int b) { return a * b; }
 static int op_xor(int a, int b) { return a ^ b; }
 static const BinOp OPS[4] = { op_add, op_sub, op_mul, op_xor };
 
-/* 関数ポインタ呼び出し: objdump で `call *...(.., %rax)` のような間接 call を期待 */
+/* 関数ポインタ呼び出し: objdump で `call *...(.., %rax)` のような間接 call を期待。
+   __attribute__((noinline)): gcc/clang の拡張。 -O2 でこの関数が呼び出し元に
+   インライン展開されないよう強制する (= 関数として残す)。 */
 __attribute__((noinline))
 int dispatch(int idx, int a, int b) {
+    /* idx & 3 で範囲を 0..3 に制限してから配列を引く。
+       OPS[k] は関数ポインタ。 続く (a, b) で実際に関数として呼ぶ。 */
     return OPS[idx & 3](a, b);
 }
 

@@ -1,15 +1,22 @@
 /*
- * 02_tetris/step1_heap/main.c — 第 4 章 (Tetris v1 / heap でピースキュー)
+ * 02_tetris/step1_heap/main.c
+ * --------------------------------------------------------------------------
+ * 第 4 章 (Tetris v1 / heap でピースキュー)
  *
  * Tetris の最小プレイアブル版。
- *   - 10x20 のプレイフィールド (固定配列、stack 上)
- *   - ピース 7 種 (I/O/T/S/Z/J/L)、回転 4 状態、形状は switch ベース (第 5 章で bit に置換)
+ *   - 10x20 のプレイフィールド (関数外 int 配列 = BSS)
+ *   - ピース 7 種 (I/O/T/S/Z/J/L)、 回転 4 状態、 形状は switch ベース (第 5 章で bit に置換)
  *   - 「次のピース」を保持する **キュー** を heap (連結リスト) で管理
- *   - 7-bag 方式: 7 種を Fisher-Yates でシャッフルし、キューの末尾に push
+ *   - 7-bag 方式: 7 種を Fisher-Yates でシャッフルし、 キューの末尾に push
  *
  * 学習材料:
- *   - 連結リスト + malloc/free を「使う動機があるデータ構造」(キュー) で再訪
+ *   - 連結リスト + malloc/free を「使う動機があるデータ構造」 (= FIFO キュー) で再訪
  *   - valgrind --tool=massif で heap 使用量を時系列で見る
+ *
+ * 新登場の C 機能:
+ *   - 多次元配列の集約初期化子: Shape SHAPES[7][4] = { {{{...}}}, ... };
+ *   - 関数ポインタ風の関数列挙: q_push / q_pop / q_free で「Queue ADT」を作る
+ *   - Fisher-Yates シャッフル: O(N) で偏りなく配列を並び替える古典アルゴリズム
  */
 #include "tty.h"
 
@@ -89,11 +96,18 @@ static int g_cur_kind, g_cur_rot, g_cur_r, g_cur_c;
 static uint64_t g_score = 0;
 static int      g_alive = 1;
 
-/* ----- Queue (heap) ----- */
+/* ----- Queue (heap) -----
+   片方向連結リスト + tail ポインタの「キュー」 実装。
+   push (末尾追加) / pop (先頭取出) が両方とも O(1) になるのが tail ポインタの効能。 */
 static void q_push(Queue *q, int kind) {
+    /* malloc(sizeof(*n)): 「n の指す先と同じサイズ」 を確保する書き方。
+       sizeof(PieceNode) と書くより、 後でリネームしてもバグらない。 */
     PieceNode *n = malloc(sizeof(*n));
     if (!n) { perror("malloc"); exit(1); }
     n->kind = kind; n->next = NULL;
+    /* 末尾に繋ぐ:
+         空キュー → head にもセット
+         非空 → 現 tail の next にぶら下げる */
     if (q->tail) q->tail->next = n;
     else         q->head       = n;
     q->tail = n;
@@ -115,12 +129,18 @@ static void q_free(Queue *q) {
     while (q->head) (void)q_pop(q);
 }
 
-/* 7-bag: 0..6 を Fisher-Yates でシャッフルしてキューに 7 個 push */
+/* 7-bag: 0..6 を Fisher-Yates でシャッフルしてキューに 7 個 push。
+   Fisher-Yates のキモ:
+     for i = N-1 downto 1:
+       j = random(0..i)        // 含む両端
+       swap(arr[i], arr[j])
+   各置換が等確率なので、 結果として N! 通りの並びが全て等確率で得られる。
+   1 ループ 1 swap で O(N)、 追加メモリ不要。 */
 static void refill_bag(Queue *q) {
     int bag[7] = {0,1,2,3,4,5,6};
     for (int i = 6; i > 0; i--) {
-        int j = rand() % (i + 1);
-        int t = bag[i]; bag[i] = bag[j]; bag[j] = t;
+        int j = rand() % (i + 1);   /* 0..i の整数 (rand の周期/偏りはこの場では許容) */
+        int t = bag[i]; bag[i] = bag[j]; bag[j] = t;  /* 3 行 swap */
     }
     for (int i = 0; i < 7; i++) q_push(q, bag[i]);
 }
