@@ -1,12 +1,22 @@
 # 開発コンテナ。host の repo を /workspace にマウント。
 # Apple Silicon でも asm 差異を出さないため amd64 を強制する。
-# 起動: docker compose -f docker/compose.yml run --rm dev
+#
+# 使い方:
+#   ワンショット (試し起動):
+#     docker compose -f docker/compose.yml run --rm dev
+#   常駐 (Mac の nvim から exec して使う = 推奨):
+#     docker compose -f docker/compose.yml up -d
+#     docker compose -f docker/compose.yml exec dev bash
+#     docker compose -f docker/compose.yml down  # 撤収
+#
+# ./dx ラッパ経由なら up -d は自動で行われる。
 services:
   dev:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     image: c-game-deepdive:latest
+    container_name: c-game-deepdive-dev
     platform: linux/amd64
     working_dir: /workspace
     volumes:
@@ -20,4 +30,6 @@ services:
       - seccomp:unconfined
     environment:
       - TERM=xterm-256color
-    command: /bin/bash
+    # `up -d` で起動し続けるため idle ループにする。
+    # `run` 時はコマンド上書きで bash を起動する。
+    command: ["sleep", "infinity"]

@@ -46,21 +46,45 @@ npx zenn list:chapters c-game-deepdive # 章一覧
 
 ## 動かす
 
-### Docker (推奨)
+### Docker ワンショット
 
 ```sh
 docker compose -f docker/compose.yml run --rm dev
+# 中に入ったら:
+cd 01_snake/step1_termios
+make run
 ```
 
 `linux/amd64` を強制しているため、Apple Silicon でもアセンブリ出力が一致します。
 
-中に入ったら章ディレクトリへ:
+### ハイブリッド開発 (Mac の nvim + Docker でビルド)
+
+ホスト側で nvim 等を回しつつ、 ビルド/valgrind/gdb は Docker 内で走らせるのが連載中もっとも回しやすいフローです。 リポジトリ同梱の **`./dx` ラッパ** がこれを引き受けます。
 
 ```sh
-cd 01_snake/step1_termios
-make run
-# 矢印キーで @ が動く。q で終了。
+./dx                                # コンテナへ bash で入る (初回は up -d まで自動)
+./dx make -C 01_snake/step1_termios run
+./dx make -C 01_snake/step3_linkedlist valgrind
+./dx make -C 02_tetris/step3_collision asan_bug
+docker compose -f docker/compose.yml down   # 撤収
 ```
+
+`./dx` は `docker compose exec dev` のラッパで、 **ホスト側の現在ディレクトリを `/workspace/<相対パス>` として扱う** ので、 章フォルダで `cd` した状態のまま `./dx make` が叩けます。
+
+#### nvim 連携 (任意)
+
+`.nvim-snippet.lua` を `~/.config/nvim/lua/local/cdeepdive.lua` などに置いて `require` すれば、 以下のキーマップが付きます。
+
+| キー | 動作 |
+|---|---|
+| `<leader>cm` | 現在ファイルの章ディレクトリで `make` |
+| `<leader>cr` | `make run` |
+| `<leader>cv` | `make valgrind` |
+| `<leader>ca` | `make asan_bug` |
+| `<leader>ci` | `make inspect` |
+| `<leader>cs` | リポルートで `./dx` (= シェルへ入る) |
+
+すべて `:split | terminal` で下窓に出力。 `q` で閉じる。
 
 ### ホスト Linux で直接
 

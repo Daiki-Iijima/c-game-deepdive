@@ -7,7 +7,9 @@ CSTD ?= -std=c11
 # デフォルトでは外してある。必要な章 (3 章 malloc/sizeof, 10 章 endian) で各章 Makefile から個別に投入する。
 WARNINGS := -Wall -Wextra -Wpedantic -Wshadow -Wstrict-prototypes
 DEBUG := -O0 -g3
-DEFS :=
+# glibc で sigaction / nanosleep / clock_gettime / TIOCGWINSZ 等の
+# POSIX 拡張を有効化する。 macOS clang は緩く通すが gcc/glibc では必須。
+DEFS := -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 INCLUDES := -I$(REPO_ROOT)/lib
 
 CFLAGS  ?= $(CSTD) $(WARNINGS) $(DEBUG) $(DEFS) $(INCLUDES)

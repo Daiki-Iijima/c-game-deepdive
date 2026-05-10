@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# dx — Docker eXec ラッパ。 Mac 側のシェル/nvim から本リポの Docker 内へ
+#       コマンドを投げる。 常駐コンテナが無ければ自動で `up -d` する。
+#
+# 使い方:
+#   ./dx                                # コンテナへ bash で入る
+#   ./dx make -C 01_snake/step1_termios # 中で make を実行
+#   ./dx make -C 01_snake/step1_termios run
+#   ./dx valgrind --leak-check=full ./snake_step1
+#
+# nvim から:
+#   :!./dx make -C %:h          (現在ファイルのディレクトリで make)
+#   :!./dx make -C %:h valgrind
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+COMPOSE_FILE="$REPO_ROOT/docker/compose.yml"
+SERVICE="dev"
+
+ensure_up() {
+  # 既に Up なら何もしない
+  if [[ "$(docker compose -f "$COMPOSE_FILE" ps --status running --format '{{.Service}}' 2>/dev/null)" == "$SERVICE" ]]; then
+    return 0
+  fi
+  echo "[dx] starting container..."
+  docker compose -f "$COMPOSE_FILE" up -d "$SERVICE" >/dev/null
+  # 起動の待ち (idle loop なので即時 healthy)
+  sleep 0.5
+}
+
+# host の作業ディレクトリ → コンテナの /workspace 内 path に変換
+host_to_container_dir() {
+  local host_pwd="$1"
+  local rel="${host_pwd#$REPO_ROOT}"
+  rel="${rel#/}"
+  if [[ -z "$rel" ]]; then
+    echo "/workspace"
+  else
+    echo "/workspace/$rel"
+  fi
+}
+
+ensure_up
+
+CONTAINER_PWD="$(host_to_container_dir "$(pwd)")"
+
+if [[ $# -eq 0 ]]; then
+  exec docker compose -f "$COMPOSE_FILE" exec -w "$CONTAINER_PWD" "$SERVICE" bash
+fi
+
+# 単一引数で渡された場合 (e.g. ./dx 'cd foo && make') は文字列ごと bash -c に渡す。
+# 複数引数で渡された場合 (e.g. ./dx make -C foo run) はそのまま exec へ。
+# 後者は && / | のシェル機能を期待しないシンプルな呼び出しを想定。
+if [[ $# -eq 1 && "$1" == *' '* ]]; then
+  exec docker compose -f "$COMPOSE_FILE" exec -w "$CONTAINER_PWD" "$SERVICE" bash -c "$1"
+else
+  exec docker compose -f "$COMPOSE_FILE" exec -w "$CONTAINER_PWD" "$SERVICE" "$@"
+fi
