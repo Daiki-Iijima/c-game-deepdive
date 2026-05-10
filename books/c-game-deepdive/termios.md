@@ -9,8 +9,7 @@ title: "第1章 — キー入力をハック: termios 解剖と raw mode の正�
 
 ![demo placeholder](https://placehold.co/800x300?text=arrow+keys+move+%40+across+screen+%28asciinema%29)
 
-## つかみ
-
+## はじめに
 普通の C プログラムでキー入力を取ると、こうなります。
 
 ```c
@@ -22,9 +21,9 @@ scanf("%c", &c);
 `scanf` が悪いわけではなく、**カーネルが入力を行単位で溜めてから渡している** からです。
 この「溜める」を解除するのが、本章のテーマ **termios の raw mode** です。
 
-## 今日の機構: termios
+## 本章のテーマ: termios
 
-ターミナルは「文字単位」のデバイスのように見えて、実はカーネルの中に **行編集機能** が住んでいます。`Backspace` で 1 文字消えるのも、`Ctrl-C` で SIGINT が飛ぶのも、`Ctrl-S` で出力が止まるのも、ぜんぶカーネルの **line discipline** がやっています。
+ターミナルは「文字単位」のデバイスのように見えて、実はカーネルの中に **行編集機能** が住んでいます。`Backspace` で 1 文字消えるのも、`Ctrl-C` で SIGINT が飛ぶのも、`Ctrl-S` で出力が止まるのも、すべてカーネルの **line discipline** がやっています。
 
 `termios` 構造体は、その挙動の ON/OFF スイッチ集です。
 
@@ -51,12 +50,11 @@ struct termios {
 | `OPOST`  | oflag | 出力後処理 | `\n` が `\r\n` に化けない |
 | `VMIN/VTIME` | c_cc | read のブロッキング | ノンブロッキング read が可能 |
 
-## 作る
-
+## 実装する
 本章は **学習目的のため、敢えて `lib/tty.c` を使わず main.c に termios ロジックを全部詰め込みます**。
 1 ファイル完結で読み下せる方が、どのフラグが効いているかを追いやすいからです。第 2 章以降はこの実装を `lib/tty.c` 共有に移し、ゲームロジックに集中していきます。
 
-`01_snake/step1_termios/main.c` のキモだけ抜粋します (全文は repo を)。
+`01_snake/step1_termios/main.c` のキモだけ抜粋します (全文はリポジトリを参照)。
 
 ```c
 #include <termios.h>
@@ -95,8 +93,7 @@ static void on_signal(int sig) {
 **ここで使った `tcsetattr` は、厳密には async-signal-safe ではありません** (POSIX `signal-safety(7)`)。「実用上は端末を救えるので使う」という割り切りで採用しています。**何が安全で何が不安全か** は第 8 章 (Roguelike signal) で正面から扱います。今は「signal ハンドラからは write(2) と低レベル syscall 中心、printf や malloc は呼ばない」を頭の隅に置いてください。
 :::
 
-## ビルドして触る
-
+## ビルドして動かす
 抜粋を読んだら、実際に動かします。Docker コンテナの中で:
 
 ```sh
@@ -107,7 +104,7 @@ make           # snake_step1 が生成される
 
 矢印キーで `@` がマス目を超えて動き、`q` で抜けます。終了後にプロンプトが普通に戻ってくることも確認してください (= `restore` が効いている証拠)。
 
-## 覗く: strace で syscall 単位で見る
+## 観察する: strace で syscall 単位で見る
 
 ```sh
 strace -e trace=ioctl,read,write ./snake_step1
@@ -128,7 +125,7 @@ write(1, "\33[10;20H ", 9)              = 9
 
 `\33[A` (3 byte シーケンス) が **矢印キーの正体** です。raw mode では「上矢印」というキーは無く、ESC `[` `A` の 3 文字が連続して飛んできます。
 
-## メンタルモデル更新
+## メンタルモデルを整理する
 
 ```
 [ターミナル] ←→ [カーネル line discipline] ←→ [プロセス stdin]
@@ -147,6 +144,5 @@ write(1, "\33[10;20H ", 9)              = 9
   - **B**: `ISIG` を **ON** に戻し、Ctrl-C はカーネルが SIGINT に変えて飛ばす経路に任せ、`SIGINT` ハンドラ側でポーズ動作を起こす
   どちらが「Ctrl-C 連打」に強いか、復元処理 (raw mode 解除と再 enter) の責務がどう分かれるか、をレポート 1 段落でまとめる。
 
-## 次回予告
-
+## 次章では
 第 2 章は **蛇の体をどう表現するか**。固定長の `char map[24][80]` を確保して、頭と体を配列に書き込みます。`sizeof` と `offsetof` を使って **1 マスが何 byte 占有しているか** を覗き、`struct __attribute__((packed))` の効果を実測します。スタック領域の概念が登場します。

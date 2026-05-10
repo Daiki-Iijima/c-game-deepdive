@@ -9,8 +9,7 @@ title: "第11章 — gdb と valgrind 実戦: シリーズ中のバグを総ざ�
 
 ![demo placeholder](https://placehold.co/800x300?text=gdb+session+%2B+valgrind+output)
 
-## つかみ
-
+## はじめに
 ここまでの 10 章で、 4 種類の典型的なメモリバグを順に登場させてきました:
 
 - 第 3 章: 二重 free (Snake)
@@ -20,7 +19,7 @@ title: "第11章 — gdb と valgrind 実戦: シリーズ中のバグを総ざ�
 
 各章で「ツールがどう叫ぶか」を見ましたが、 散らばった知識のままでは 「実際にバグに遭遇した時の手順」 になりません。 本章は **小さな実験ファイル `buggy.c` 1 本** に上記の縮小版を仕込み、 **gdb と valgrind を使った標準手順** を 1 つずつ通します。
 
-## 今日の機構: バグの種別 × ツールの相性
+## 本章のテーマ: バグの種別 × ツールの相性
 
 |  | gdb (動的) | valgrind (動的) | ASan (静的計装) |
 |---|---|---|---|
@@ -33,8 +32,7 @@ title: "第11章 — gdb と valgrind 実戦: シリーズ中のバグを総ざ�
 
 「症状が出た時にどのツールから当てるか」 を選べることが本章のゴール。
 
-## 作る・壊す・直す
-
+## 動かして・壊して・直す
 ```sh
 cd 04_tools/bug_hunting
 make
@@ -47,7 +45,7 @@ make run_uninit                  # → valgrind の Conditional jump on uninitia
 
 `buggy.c` の中身は意図的に短いので、 `cat buggy.c` してから出力を読むのがおすすめ。
 
-## 覗く 1: gdb の最低限フロー
+## 観察 1: gdb の最低限フロー
 
 ```sh
 ./buggy --bug=use-after-free
@@ -92,7 +90,7 @@ gdb ./buggy
 
 これで `*p` の値が破壊された瞬間に gdb が止まります。 デッドロック/use-after-free 系で頻用。
 
-## 覗く 2: valgrind を「静か → 騒がしい」順に当てる
+## 観察 2: valgrind を「静か → 騒がしい」順に当てる
 
 ```sh
 valgrind ./buggy --bug=uninit            # 軽い chk
@@ -104,7 +102,7 @@ valgrind --tool=massif ./tetris_step1     # heap 使用量グラフ (第 4 章)
 
 `--track-origins=yes` は uninit 系の最強オプション。 **どこで作られた未初期化値が、 どこで使われたか** を全部追ってくれます (代わりに遅い)。
 
-## 覗く 3: pipe デッドロック (第 9 章) を gdb で
+## 観察 3: pipe デッドロック (第 9 章) を gdb で
 
 第 9 章の AI 連携で `fflush(stdout)` を抜くと、 親の `read` で全プロセスがハングします。 gdb で見るには:
 
@@ -120,7 +118,7 @@ gdb -p <子PID>
 
 両側の `bt` で「親は read(...) 中、 子は printf 内部の write(...) 中、 双方相手の動きを待っている」 が読み取れます。 これがデッドロックの可視化。
 
-## メンタルモデル更新: 「叫ぶ瞬間」と「気づく瞬間」 の距離
+## メンタルモデルを整理する: 「叫ぶ瞬間」と「気づく瞬間」 の距離
 
 ```
 [コード上のバグ]   ──→ [メモリ破壊]   ──→ [症状]
@@ -141,6 +139,5 @@ gdb -p <子PID>
 - **Med**: 第 6 章の Tetris (`02_tetris/step3_collision/main.c`) を `gdb -tui` で開き、 `--bug=oob` で gdb を attach。 `watch g_score_history[15]` を仕掛け、 そこを書き換える瞬間に止まることを確認。
 - **Hard**: 第 9 章の Roguelike を `fflush` 削除版に書き換えて起動 → ハングしたら別ターミナルから `gdb -p` で親と子の両方を attach し、 両方の bt を貼り付けてレポート。 「**両プロセスの bt を一画面に並べる**」 のがデッドロック解析の定石。
 
-## 次回予告
-
+## 次章では
 最終章 (第 12 章) は **逆アセンブル**。 自分が書いた C コードがどんな asm に化けたか、 `readelf` でセクションを覗き、 `objdump -d` で `main` を覗き、 `perf stat` で 1 tick あたりの命令数 / cache miss を測ります。 第 5 章の関数ポインタ呼び出しが asm のどこに座っているか、 第 6 章の ASan の毒チェックが本当にインライン展開されているか、 自分の目で確かめます。

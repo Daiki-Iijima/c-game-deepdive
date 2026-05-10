@@ -9,13 +9,12 @@ title: "第8章 — SIGWINCH を捕まえる: signal handler の作法 (async-si
 
 ![demo placeholder](https://placehold.co/800x300?text=resize+terminal+%2C+map+regenerates)
 
-## つかみ
-
+## はじめに
 第 7 章のダンジョンは **起動時のターミナルサイズで固定** でした。 プレイ中にウィンドウをドラッグでリサイズすると、 ダンジョンが画面を超えたり余白が空いたり。 これを直すには、 OS から **「ウィンドウサイズが変わったよ」** という通知を受け取る必要があります。 その通知の名前が **SIGWINCH (SIGnal WINdow CHange)**。
 
 第 1 章の終わりに「signal handler から `tcsetattr` を呼ぶのは厳密には不正」と予告しました。 本章はその約束を回収し、 **signal handler の中で何が許され、 何が禁じられているか** を真面目に整理します。
 
-## 今日の機構: handler は flag を立てるだけ
+## 本章のテーマ: handler は flag を立てるだけ
 
 良くないパターン (やってしまいがち):
 
@@ -61,8 +60,7 @@ for (;;) {
 
 `free` / `malloc` / `render` を **メインループの文脈で** 呼んでいるので、 これは安全。
 
-## 作る
-
+## 実装する
 ```sh
 cd 03_roguelike/step2_signal
 make
@@ -71,7 +69,7 @@ make
 
 プレイ中にターミナルウィンドウを **ドラッグでリサイズ** してください。 ダンジョンが新しいサイズで再生成されます (シードは `time(NULL)` 起動時固定なので、 同じシードのもとで作り直す挙動)。 HUD に `term=AxB` が表示され、 リサイズすると数字が変わります。
 
-## 覗く: strace で SIGWINCH を見る
+## 観察する: strace で SIGWINCH を見る
 
 別ターミナルで `tput lines` / `tput cols` を確認しつつ、 こちらの起動時に:
 
@@ -104,7 +102,7 @@ ioctl(1, TIOCGWINSZ, {ws_row=30, ws_col=120, ...}) = 0
 
 SIGWINCH の場合、 中断された `read` が再開する前に **再描画したい**。 だから `SA_RESTART` を外します。 SIGINT (Ctrl-C で素直に終了) なら restart で良い。 用途で使い分ける。
 
-## 覗く: signal-safety(7) の早見表
+## 観察する: signal-safety(7) の早見表
 
 `man 7 signal-safety` をコンテナ内で開くと、 handler から呼んでよい関数のリストがあります。 抜粋:
 
@@ -117,7 +115,7 @@ SIGWINCH の場合、 中断された `read` が再開する前に **再描画�
 
 「I/O は write は OK、 printf は NG」 が一番引っかかる罠。 第 1 章で `printf` をハンドラから使わず `write(2, ...)` を使ったのも、 **本章の予習** だったわけです。
 
-## メンタルモデル更新
+## メンタルモデルを整理する
 
 ```
 [OS カーネル]                    [ユーザプロセス]
@@ -141,6 +139,5 @@ SIGWINCH の場合、 中断された `read` が再開する前に **再描画�
 - **Med**: handler の中で **わざと** `printf("resized\n")` を呼ぶ。 リサイズを高速で繰り返したり、 `malloc`-heavy な状況で長時間プレイしたりして、 「**ほとんどの場合は動くが、 時々ハングや変な出力が出る**」 様子を観察する (再現性は低いが体験できる)。
 - **Hard**: `self-pipe` パターンを実装せよ。 `pipe(fd)` を起動時に作り、 handler は `write(fd[1], ...)` だけする。 メインループは `select` / `poll` で `fd[0]` と `STDIN_FILENO` の両方を待つ。 `read` の `EINTR` ハンドリングが消え、 構造が綺麗になる。 第 9 章の fork+pipe の予習にもなる。
 
-## 次回予告
-
+## 次章では
 第 9 章は **モンスターを別プロセスで動かします**。 `fork()` で子プロセスを作り、 親と子のあいだに `pipe()` を 2 本張って双方向通信。 子は AI の経路計算に集中し、 親はゲームループに集中。 ターミナルの取り合いが起きないよう、 `dup2` で標準入出力を慎重に切り回します。 第 8 章で作った self-pipe の発想がそのまま生きます。

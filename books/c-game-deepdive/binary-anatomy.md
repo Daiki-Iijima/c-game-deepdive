@@ -9,8 +9,7 @@ title: "第12章 — バイナリを解剖する: ELF / objdump / asm / perf と
 
 ![demo placeholder](https://placehold.co/800x300?text=readelf+%2B+objdump+%2B+perf)
 
-## つかみ
-
+## はじめに
 最終章です。 第 0 章で 「`hello.c` → `hello.i` → `hello.s` → `hello.o` → `hello`」 の 4 段変換を見ました。 いま私たちは、 連載を通して書いた **数千行の C コード** を 1 個の ELF バイナリに焼いた状態にいます。
 
 本章は、 そのバイナリを **3 つの解像度** で解剖します。
@@ -21,7 +20,7 @@ title: "第12章 — バイナリを解剖する: ELF / objdump / asm / perf と
 
 連載中に書いた構造 (関数ポインタ・ASan の毒チェック・heap への触り方) が、 機械の側からどう見えるかを 「目で確かめる」 のがゴール。
 
-## 今日の機構: 解剖用の小さな素材
+## 本章のテーマ: 解剖用の小さな素材
 
 `04_tools/binary_anatomy/sample.c` は連載のゲームではなく、 解剖に都合のよい 3 機能を 1 ファイルにまとめた素材です:
 
@@ -44,7 +43,7 @@ uint64_t hot_loop(const int *arr, size_t n) {
 
 `__attribute__((noinline))` を付けたのは、 -O2 で **インライン展開されて消えてしまわない** ようにするため。 解剖したい関数を意図的に残します。
 
-## 覗く 1: readelf でセクション構造
+## 観察 1: readelf でセクション構造
 
 ```sh
 cd 04_tools/binary_anatomy
@@ -65,7 +64,7 @@ make readelf
 
 第 2 章で 「`map[][]` は BSS にいる」 と書いたのが、 ここの `.bss` 行に対応します。 `OPS[4]` (関数ポインタテーブル) は `.rodata` に居ます。 これらは **OS が ELF を mmap した瞬間に各セクションが配置される** わけではなく、 **複数の section が 1 つの segment にまとめられて mmap される** (ELF の二重表現)。 第 10 章の save file で見た 「メモリ表現」 と 「ファイル表現」 の話と同じ構造です。
 
-## 覗く 2: objdump で `dispatch` を逆アセンブル
+## 観察 2: objdump で `dispatch` を逆アセンブル
 
 ```sh
 make disas
@@ -86,7 +85,7 @@ make disas
 
 `hot_loop` は単純なので、 `-O2` で **SIMD 化 (SSE / AVX)** されることもあります。 `vpmovsxdq` のような命令が並んだら、 それが SIMD。 連載で出てきた `for (i = 0; i < n; i++) s += arr[i]` が一回のベクトル命令で 4-8 要素まとめて処理されています。
 
-## 覗く 3: perf stat で実行コストを測る
+## 観察 3: perf stat で実行コストを測る
 
 ```sh
 make perf
@@ -120,7 +119,7 @@ make perf
 
 「**コンパイル時計装** とは要するにメモリアクセスごとに小さな関数呼び出しを差し込むこと」 という抽象的な説明が、 ここで具体物として手に入ります。
 
-## メンタルモデル更新: コンパイル → 実行 の通し図
+## メンタルモデルを整理する: コンパイル → 実行 の通し図
 
 ```
 hello.c          [Cソース]

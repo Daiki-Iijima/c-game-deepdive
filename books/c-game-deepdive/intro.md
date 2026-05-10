@@ -7,8 +7,7 @@ title: "第0章 — 環境構築とゲームループ: なぜ Docker amd64 を�
 :::
 
 
-## つかみ
-
+## はじめに
 「C のゲームを書くだけなら gcc 一発でいいじゃん」と思うかもしれません。
 それでもこの連載は **Docker amd64 強制** から始めます。理由はひとつ:
 
@@ -17,7 +16,7 @@ title: "第0章 — 環境構築とゲームループ: なぜ Docker amd64 を�
 Apple Silicon の M1/M2 で `gcc` を素で使うと ARM64 (aarch64) のアセンブリが出ます。x86_64 とはレジスタ名も呼び出し規約も違うので、本文の説明と画面が一致しなくなります。
 連載の最終章で「あれ、私の `mov` どこ?」と立ち止まる読者を出さないために、**初日に環境を一本化**します。
 
-## 今日の機構: 開発環境
+## 本章のテーマ: 開発環境
 
 - Linux Docker (`ubuntu:24.04`) を `--platform=linux/amd64` で固定
 - gcc / clang / make / gdb / valgrind / strace / ltrace / binutils / elfutils / perf を一緒に入れる
@@ -26,10 +25,9 @@ Apple Silicon の M1/M2 で `gcc` を素で使うと ARM64 (aarch64) のアセ�
 
 `docker/Dockerfile` と `docker/compose.yml` を覗いてください。コメントを追えば 1 行ずつ意味が分かります。
 
-## 作る
-
+## 実装する
 ```sh
-git clone https://github.com/<you>/c-game-deepdive
+git clone https://github.com/Daiki-Iijima/c-game-deepdive
 cd c-game-deepdive
 docker compose -f docker/compose.yml run --rm dev
 ```
@@ -68,7 +66,7 @@ file ./hello
 `file` の出力で **`ELF 64-bit LSB pie executable, x86-64`** と表示されたら勝ちです。
 ARM64 で出ていたら Docker の platform 指定が効いていません。`docker compose` 経由で起動しているか確認してください。
 
-## 覗く: コンパイルパイプライン
+## 観察する: コンパイルパイプライン
 
 普段「コンパイルする」と一言で済ませている操作は、4 つに分解できます。
 
@@ -100,7 +98,7 @@ gcc hello.o -o hello
 `hello.s` を開くと `main:` ラベル直下に `lea`, `call puts`, `xor eax,eax`, `ret` が並んでいます。第 12 章でここに戻ってきます。
 `hello.o` は実行できません (`./hello.o` → `cannot execute binary file`)。再配置情報がまだ「どこに置かれるか分からない」状態だからです。`readelf -h hello.o` の `Type: REL` がそれを物語っています。リンク後は `Type: DYN` (PIE) になります。
 
-## メンタルモデル更新
+## メンタルモデルを整理する
 
 ```
 [ソース] -E→ [展開済み] -S→ [asm] -c→ [.o] -ld→ [実行ファイル]
@@ -115,6 +113,5 @@ gcc hello.o -o hello
 - **Med**: `gcc -O2` でコンパイルすると `hello.s` の行数がどう変わるか観察。 `main` の中身は何行になりましたか?
 - **Hard**: `hello.o` を `objcopy --redefine-sym main=main2 hello.o hello2.o` で書き換え、リンクが壊れることを確認。`nm hello.o` と `nm hello2.o` の差を読む。
 
-## 次回予告
-
+## 次章では
 第 1 章では **キーボードを CUI ゲーム用に乗っ取ります**。Enter を押さなくても 1 文字届くようにする「raw mode」の設定 — `termios` 構造体のフラグを 1 ビットずつ落としていきます。読み終えるころには、`ICANON` / `ECHO` / `ISIG` / `OPOST` が **どのアプリの不便さの正体だったか** が分かるようになります。

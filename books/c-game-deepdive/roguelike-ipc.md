@@ -9,8 +9,7 @@ title: "第9章 — モンスターを別プロセスで動かす: fork / pipe /
 
 ![demo placeholder](https://placehold.co/800x300?text=parent+game+%2B+child+AI+via+pipes)
 
-## つかみ
-
+## はじめに
 第 8 章までの Roguelike は **単一プロセス** でした。 AI を入れたい時、 普通は同じプロセス内で `update_monsters()` を呼びます。 それで困らないのに、 なぜわざわざ **別プロセスに切り出す** か?
 
 理由はいくつもあります:
@@ -21,7 +20,7 @@ title: "第9章 — モンスターを別プロセスで動かす: fork / pipe /
 
 そして何より、 **C の中で「複数プロセスを協調させる」 を体感する一番素直な題材** です。
 
-## 今日の機構: fork + 2 本の pipe
+## 本章のテーマ: fork + 2 本の pipe
 
 親と子の通信は **2 本の pipe** で双方向にします。
 
@@ -89,8 +88,7 @@ sigaction(SIGCHLD, &sa, NULL);
 
 `g_child_dead` は第 8 章で覚えた **volatile sig_atomic_t** パターン。 メインループはそれを見て「AI 居なくなった」 を HUD に出します。
 
-## 作る
-
+## 実装する
 ```sh
 cd 03_roguelike/step3_ipc
 make
@@ -101,7 +99,7 @@ make
 
 捕まると `caught by AI!` メッセージが出ます。 `q` で終了すると、 親が `close(p2c[1])` してから `waitpid` で子を待ちます。 子は `fgets` が EOF を受けて `_exit(0)`、 SIGCHLD が発火して reap、 親が終了。 流れが見える設計です。
 
-## 覗く: strace で fork/pipe/dup2 の流れを見る
+## 観察する: strace で fork/pipe/dup2 の流れを見る
 
 ```sh
 make strace
@@ -134,7 +132,7 @@ read(5, "move 1 0\n", 1) = 1           ← 親 ← 子
 
 第 7 章のリスク登録に「Roguelike fork/pipe で端末制御を奪い合う」 と書きましたが、 本実装では **子の stdin/stdout は pipe にすり替えてある** ため、 子は ttybe touch しません。 親だけが `tty_raw_mode()` を呼んで端末を独占。 これが「dup2 で `STDIN_FILENO` / `STDOUT_FILENO` を切る」 重要性です。
 
-## メンタルモデル更新
+## メンタルモデルを整理する
 
 ```
 親プロセス (端末を独占)              子プロセス (AI)
@@ -157,6 +155,5 @@ read(5, "move 1 0\n", 1) = 1           ← 親 ← 子
 - **Med**: AI を **別バイナリ** に切り出す。 `ai.c` を書き、 `main` を `run_ai_child()` 内容にする。 親の `if (pid == 0)` 分岐は `execvp("./ai", args)` に置き換える。 子の依存ライブラリを切り替えるだけで AI を差し替え可能になる。
 - **Hard**: `select` (or `poll`) で 「親の TTY 入力」 と 「子からの返信」 を同時に待つ ノンブロッキング設計に直す。 ask_ai の中の同期 read を止め、 「最新の応答が届いていれば反映、 まだなら去年の応答を使う」 設計に。 60fps を維持できるか strace で確認。
 
-## 次回予告
-
+## 次章では
 第 10 章は **セーブデータ**。 ゲーム状態の構造体を `fwrite` でバイナリにそのまま書き出すと、 一見動く。 だが **別マシンでロードした瞬間に壊れる**。 padding と endian の罠です。 `Map` 構造体を例に、 「シリアライザを明示的に書く」 という当然の作法を、 失敗込みで体験します。
