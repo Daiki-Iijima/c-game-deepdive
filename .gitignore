@@ -1,0 +1,30 @@
+# build artifacts
+*.o
+*.i
+*.s
+*.a
+*.dSYM/
+
+# binaries (各章 Makefile が生成するもの)
+00_intro/hello
+01_snake/step1_termios/snake_step1
+01_snake/step2_array/snake_step2
+01_snake/step3_linkedlist/snake_step3
+02_tetris/**/tetris*
+03_roguelike/**/rogue*
+04_tools/**/lab*
+
+# coredumps
+core
+core.*
+vgcore.*
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# zenn-cli
+node_modules/
+.zenn/

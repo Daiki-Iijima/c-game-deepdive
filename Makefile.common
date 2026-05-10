@@ -1,0 +1,18 @@
+# 各章 Makefile が include する共通フラグ。
+# 章テーマに合わせ、特定章でだけ -fsanitize=address などを増やしてよい。
+
+CC ?= gcc
+CSTD ?= -std=c11
+# -Wconversion は中級者の演習で int↔size_t 警告が大量発生し学習摩擦になるため
+# デフォルトでは外してある。必要な章 (3 章 malloc/sizeof, 10 章 endian) で各章 Makefile から個別に投入する。
+WARNINGS := -Wall -Wextra -Wpedantic -Wshadow -Wstrict-prototypes
+DEBUG := -O0 -g3
+DEFS :=
+INCLUDES := -I$(REPO_ROOT)/lib
+
+CFLAGS  ?= $(CSTD) $(WARNINGS) $(DEBUG) $(DEFS) $(INCLUDES)
+LDFLAGS ?=
+LDLIBS  ?=
+
+# tty.c は libtty として静的リンク。各章はこれを参照すれば termios+ANSI が使える。
+LIB_TTY_SRC := $(REPO_ROOT)/lib/tty.c
