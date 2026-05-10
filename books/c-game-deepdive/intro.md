@@ -32,6 +32,10 @@ cd c-game-deepdive
 docker compose -f docker/compose.yml run --rm dev
 ```
 
+:::message
+**ホストの nvim/エディタを使い続けたい人へ**: リポジトリ直下に `./dx` というラッパスクリプトを置いてあります。 Mac の nvim から `./dx make -C 01_snake/step1_termios` のように打つと、 中身は **Docker コンテナ内** で `make` が走ります。 章本文は `docker compose run --rm dev` で中に入って手で叩く前提で書いてありますが、 慣れてきたら `./dx` 経由の方が往復が速いです。 詳しくは [README](https://github.com/Daiki-Iijima/c-game-deepdive#ハイブリッド開発-mac-の-nvim--docker-でビルド) を。
+:::
+
 :::details `docker compose run --rm dev` の中身
 - `compose -f docker/compose.yml`: 使う compose ファイルを明示。 デフォルト `docker-compose.yml` ではなく `docker/compose.yml` を指している。
 - `run`: サービス (ここでは `dev`) を **その場限りで** 起動するサブコマンド。 長期常駐させる `up` とは違う。
