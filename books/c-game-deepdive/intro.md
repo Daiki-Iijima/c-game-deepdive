@@ -9,12 +9,17 @@ title: "第0章 — 環境構築とゲームループ: なぜ Docker amd64 を�
 
 ## はじめに
 「C のゲームを書くだけなら gcc 一発でいいじゃん」と思うかもしれません。
-それでもこの連載は **Docker amd64 強制** から始めます。理由はひとつ:
+
+それでもこの連載は **Docker amd64 強制** から始めます。
+理由はひとつ:
 
 **第 12 章で `objdump -d ./game` を打ったとき、読者全員の画面に同じアセンブリが出てほしい**
 
-Apple Silicon の M1/M2 で `gcc` を素で使うと ARM64 (aarch64) のアセンブリが出ます。x86_64 とはレジスタ名も呼び出し規約も違うので、本文の説明と画面が一致しなくなります。
+Apple Silicon の M1/M2 で `gcc` を素で使うと ARM64 (aarch64) のアセンブリが出ます。
+x86_64 とはレジスタ名も呼び出し規約も違うので、本文の説明と画面が一致しなくなります。
+
 連載の最終章で「あれ、私の `mov` どこ?」と立ち止まる読者を出さないために、**初日に環境を一本化**します。
+
 
 ## 本章のテーマ: 開発環境
 
@@ -23,7 +28,9 @@ Apple Silicon の M1/M2 で `gcc` を素で使うと ARM64 (aarch64) のアセ�
 - ホストの作業フォルダを `/workspace` にバインドマウント
 - `SYS_PTRACE` と `seccomp:unconfined` を許可 (gdb / strace / perf に必要)
 
-`docker/Dockerfile` と `docker/compose.yml` を覗いてください。コメントを追えば 1 行ずつ意味が分かります。
+`docker/Dockerfile` と `docker/compose.yml` を覗いてください。
+コメントを追えば 1 行ずつ意味が分かります。
+
 
 ## 実装する
 ```sh
@@ -54,6 +61,7 @@ readelf --version
 ```
 
 全部通ったら準備完了です。
+
 
 :::message
 **`perf` だけは要注意**: 第 12 章で扱う `perf` は、コンテナの中から **ホスト Linux カーネル** を直接叩くツールです。Docker Desktop (mac/Windows) 経由だと、ホストが Linux ではなく Docker Desktop の VM kernel になるため、`perf stat` のいくつかの計測項目が `<not supported>` で返ってくることがあります。
@@ -91,11 +99,29 @@ file ./hello
 :::
 
 `file` の出力で **`ELF 64-bit LSB pie executable, x86-64`** と表示されたら勝ちです。
-ARM64 で出ていたら Docker の platform 指定が効いていません。`docker compose` 経由で起動しているか確認してください。
+
+:::details ELF / DYN / PIE / REL / LSB ってなに?
+本連載で頻出する用語をまとめておきます。 全部 ELF (実行ファイルの形式) の周りの単語です。
+
+- **ELF (Executable and Linkable Format)**: Linux / FreeBSD / Solaris などで使われる **実行ファイル・オブジェクトファイル・共有ライブラリの統一フォーマット**。 ファイルの先頭 4 byte に `\x7f` `E` `L` `F` というマジック番号がある。 macOS は ELF ではなく Mach-O、 Windows は PE という別形式を使う。
+- **64-bit / 32-bit**: アドレスやレジスタの幅。 本連載は x86_64 を前提にしているので 64-bit。
+- **LSB (Least Significant Byte first) / MSB**: バイト順 (= エンディアン)。 LSB = リトルエンディアン (x86 / ARM の標準)、 MSB = ビッグエンディアン (古い PowerPC / SPARC)。 第 10 章のセーブファイル章でしっかり扱う。
+- **`Type: REL` (Relocatable)**: `gcc -c` で出る `.o` ファイルがこれ。 機械語は入っているが、 シンボルが置かれる絶対アドレスが未確定。 リンクして初めて実行可能になる。
+- **`Type: EXEC` (Executable, 古い形式)**: 昔の実行ファイル。 .text / .data などのアドレスがコンパイル時に固定。 攻撃者にアドレスを予測されるためセキュリティ的に弱い。
+- **`Type: DYN` (Dynamic)**: 共有ライブラリ (`.so`) と **PIE 実行ファイル** の両方がこれ。 「自分自身の実行ファイルでも、 動的にロードされる」 設計。 アドレスは起動時にカーネルがランダム化 (= ASLR) して埋める。
+- **PIE (Position Independent Executable)**: 「アドレスが固定されてない実行ファイル」。 全コードが相対アドレス (RIP-relative on x86_64) で動くようにコンパイルされており、 起動時にどこにロードされてもよい。 最近の Linux ディストリは `-fpie -pie` がデフォルト。 `Type: DYN` と表示される。
+- **ABI (Application Binary Interface)**: バイナリレベルの取り決め。 関数引数をどのレジスタで渡すか (System V AMD64 ABI: rdi/rsi/rdx/rcx/r8/r9)、 構造体のアラインメントはどうか、 などをまとめたもの。 「同じ ELF でも ABI が違うマシンで動かすと壊れる」 のがクロスプラットフォーム互換性の正体。
+- **Magic / マジック番号**: ファイル形式を識別する固定パターン。 ELF は `\x7f ELF`、 Mach-O は `\xCF\xFA\xED\xFE`、 ZIP は `PK\x03\x04`、 などなど。 `file` コマンドが見ているのはこれ。
+:::
+
+ARM64 で出ていたら Docker の platform 指定が効いていません。
+`docker compose` 経由で起動しているか確認してください。
+
 
 ## 観察する: コンパイルパイプライン
 
 普段「コンパイルする」と一言で済ませている操作は、4 つに分解できます。
+
 
 ```
 hello.c
@@ -114,6 +140,7 @@ hello     ← ELF 実行可能ファイル
 ```
 
 実際に止めて見てみましょう。
+
 
 ```sh
 gcc -E hello.c -o hello.i
@@ -140,8 +167,14 @@ gcc hello.o -o hello
 - セクションごとの詳細は `-S` (`--section-headers`) で見れます。 第 12 章でやります。
 :::
 
-`hello.s` を開くと `main:` ラベル直下に `lea`, `call puts`, `xor eax,eax`, `ret` が並んでいます。第 12 章でここに戻ってきます。
-`hello.o` は実行できません (`./hello.o` → `cannot execute binary file`)。再配置情報がまだ「どこに置かれるか分からない」状態だからです。`readelf -h hello.o` の `Type: REL` がそれを物語っています。リンク後は `Type: DYN` (PIE) になります。
+`hello.s` を開くと `main:` ラベル直下に `lea`, `call puts`, `xor eax,eax`, `ret` が並んでいます。
+第 12 章でここに戻ってきます。
+
+`hello.o` は実行できません (`./hello.o` → `cannot execute binary file`)。
+再配置情報がまだ「どこに置かれるか分からない」状態だからです。
+`readelf -h hello.o` の `Type: REL` がそれを物語っています。
+リンク後は `Type: DYN` (PIE) になります。
+
 
 ## メンタルモデルを整理する
 
@@ -150,13 +183,22 @@ gcc hello.o -o hello
             preprocess    compile     assemble    link
 ```
 
-「コンパイラ」と一語で呼んでいたものは、**4 つの独立した変換器** の連なりです。それぞれの段で **何の情報が増えて何の情報が捨てられるか** を意識すると、第 12 章の ELF 解剖が「最後に残ったもの」に見えてきます。
+「コンパイラ」と一語で呼んでいたものは、**4 つの独立した変換器** の連なりです。
+それぞれの段で **何の情報が増えて何の情報が捨てられるか** を意識すると、第 12 章の ELF 解剖が「最後に残ったもの」に見えてきます。
+
 
 ## 演習
 
 - **Easy**: `hello.c` の `puts` を `printf("%d\n", 42)` に変えて `hello.s` を再生成し、差分を眺める。
-- **Med**: `gcc -O2` でコンパイルすると `hello.s` の行数がどう変わるか観察。 `main` の中身は何行になりましたか?
-- **Hard**: `hello.o` を `objcopy --redefine-sym main=main2 hello.o hello2.o` で書き換え、リンクが壊れることを確認。`nm hello.o` と `nm hello2.o` の差を読む。
+
+- **Med**: `gcc -O2` でコンパイルすると `hello.s` の行数がどう変わるか観察。
+ `main` の中身は何行になりましたか?
+- **Hard**: `hello.o` を `objcopy --redefine-sym main=main2 hello.o hello2.o` で書き換え、リンクが壊れることを確認。
+`nm hello.o` と `nm hello2.o` の差を読む。
+
 
 ## 次章では
-第 1 章では **キーボードを CUI ゲーム用に乗っ取ります**。Enter を押さなくても 1 文字届くようにする「raw mode」の設定 — `termios` 構造体のフラグを 1 ビットずつ落としていきます。読み終えるころには、`ICANON` / `ECHO` / `ISIG` / `OPOST` が **どのアプリの不便さの正体だったか** が分かるようになります。
+第 1 章では **キーボードを CUI ゲーム用に乗っ取ります**。
+Enter を押さなくても 1 文字届くようにする「raw mode」の設定 — `termios` 構造体のフラグを 1 ビットずつ落としていきます。
+読み終えるころには、`ICANON` / `ECHO` / `ISIG` / `OPOST` が **どのアプリの不便さの正体だったか** が分かるようになります。
+

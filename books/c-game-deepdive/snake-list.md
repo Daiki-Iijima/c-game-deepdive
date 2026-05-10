@@ -10,10 +10,16 @@ title: "第3章 — 蛇を連結リストで育てる: malloc / free / 二重 fr
 ![demo placeholder](https://placehold.co/800x300?text=snake+v2+%28linked+list%29+%2B+food)
 
 ## はじめに
-第 2 章の蛇は **長さの上限が `MAX_LEN = 256` で固定** でした。長く伸ばしたいなら `MAX_LEN` を増やすしかなく、その分メモリは常に予約されたまま。
+第 2 章の蛇は **長さの上限が `MAX_LEN = 256` で固定** でした。
+長く伸ばしたいなら `MAX_LEN` を増やすしかなく、その分メモリは常に予約されたまま。
+
 プレイ開始時 5 マスしかない蛇のために 256 マス分の配列を抱えるのは「使わない倉庫を借りっぱなし」みたいなものです。
 
-本章は、**蛇が伸びた瞬間にだけ 1 ノード借り、縮んだ瞬間に返す** 仕組みに置き換えます。借りる窓口の名前は **`malloc`**、返す窓口は **`free`**。同時に、その窓口で起こる **最初の事故 — 二重 free** を、 `valgrind` という探偵を呼んで現場で見ます。
+
+本章は、**蛇が伸びた瞬間にだけ 1 ノード借り、縮んだ瞬間に返す** 仕組みに置き換えます。
+借りる窓口の名前は **`malloc`**、返す窓口は **`free`**。
+同時に、その窓口で起こる **最初の事故 — 二重 free** を、 `valgrind` という探偵を呼んで現場で見ます。
+
 
 ## 本章のテーマ: 連結リストと malloc/free
 
@@ -58,6 +64,7 @@ if (eat) {
 
 ここで **「`free` を 2 回呼んだらどうなるか?」** に踏み込みます。
 
+
 ## 実装する
 ```sh
 cd 01_snake/step3_linkedlist
@@ -65,19 +72,29 @@ make
 ./snake_step3        # 食料 * を食べると体が伸びる
 ```
 
-`q` で抜けます。終了時に `snake_free(&s)` で残ったリストを全部 `free` しています。これを忘れると **leak** が発生します。
+`q` で抜けます。
+終了時に `snake_free(&s)` で残ったリストを全部 `free` しています。
+これを忘れると **leak** が発生します。
+
 
 ## 観察 1: わざと二重 free を起こす
 
 `main.c` には学習用に「テールを `free` した直後にもう一度 `free` する」モードを仕込んであります。
 
+
 ```sh
 ./snake_step3 --bug=double-free
 ```
 
-何ステップか動いた直後に **クラッシュ**します。glibc の malloc 実装が「同じブロックの二度目の解放」を検出して `double free or corruption` というメッセージを吐いて `abort()` します。 `dmesg` や coredump を見るとさらに細かく追えます。
+何ステップか動いた直後に **クラッシュ**します。
+glibc の malloc 実装が「同じブロックの二度目の解放」を検出して `double free or corruption` というメッセージを吐いて `abort()` します。
+ `dmesg` や coredump を見るとさらに細かく追えます。
 
-しかし、 **glibc が必ず気づくとは限りません**。気づくのは比較的最近の glibc の話で、しかも検出は性能とのトレードオフで間引かれます。確実に捕まえるには **valgrind** を使います。
+
+しかし、 **glibc が必ず気づくとは限りません**。
+気づくのは比較的最近の glibc の話で、しかも検出は性能とのトレードオフで間引かれます。
+確実に捕まえるには **valgrind** を使います。
+
 
 ## 観察 2: valgrind で犯行を再現する
 
@@ -103,6 +120,7 @@ make valgrind
 
 少し動かしてから `q` で抜けると、こんな出力が出ます (抜粋)。
 
+
 ```
 ==1234== Invalid free() / delete / delete[] / realloc()
 ==1234==    at 0x484XXXX: free (vg_replace_malloc.c:XXX)
@@ -119,9 +137,12 @@ make valgrind
 - **どこで**: `main.c:140` が **2 度目の `free`**、`main.c:138` が **1 度目の `free`**
 - **どこから来たブロックか**: その 2 行の間に `at malloc...by main.c:XX` (元の確保場所) が出ます
 
-valgrind は **「同じアドレスがいつ・どこで `malloc` され、いつ・どこで何度 `free` されたか」** を全部覚えています。これが「探偵」の正体です。
+valgrind は **「同じアドレスがいつ・どこで `malloc` され、いつ・どこで何度 `free` されたか」** を全部覚えています。
+これが「探偵」の正体です。
+
 
 valgrind を抜けて leak も見ましょう。
+
 
 ```
 ==1234== HEAP SUMMARY:
@@ -129,7 +150,9 @@ valgrind を抜けて leak も見ましょう。
 ==1234==   total heap usage: 47 allocs, 47 frees, ...
 ```
 
-`in use at exit: 0 bytes` ならリーク無し。`snake_free()` を消した状態で再実行すると、 **使用中ブロックの一覧** が `definitely lost` として表示されます。
+`in use at exit: 0 bytes` ならリーク無し。
+`snake_free()` を消した状態で再実行すると、 **使用中ブロックの一覧** が `definitely lost` として表示されます。
+
 
 ## メンタルモデルを整理する: heap
 
@@ -161,11 +184,16 @@ valgrind を抜けて leak も見ましょう。
 | 拡縮 | 上限固定 | 必要なときに malloc/free |
 | キャッシュ局所性 | 強い | 弱い |
 
-「リストの方が偉い」わけでも「配列の方が偉い」わけでもなく、**捨てるコストと借りるコストのトレードオフ** です。第 12 章で `perf` を使ってここに戻ってきます。
+「リストの方が偉い」わけでも「配列の方が偉い」わけでもなく、**捨てるコストと借りるコストのトレードオフ** です。
+第 12 章で `perf` を使ってここに戻ってきます。
+
 
 ## 観察 3: heap と stack のアドレス
 
-ゲームを動かす前に、 `pmap $(pgrep snake_step3)` (別ターミナル) で蛇プロセスのメモリマップを覗くと、 `[heap]` 行と `[stack]` 行のアドレス範囲が見えます。 `Node` ノード達のポインタは `[heap]` 範囲内、 `Snake s` 構造体のアドレスは `[stack]` 範囲内に居ます。第 2 章の `&s_on_stack` と `&map` の話の続きです。
+ゲームを動かす前に、 `pmap $(pgrep snake_step3)` (別ターミナル) で蛇プロセスのメモリマップを覗くと、 `[heap]` 行と `[stack]` 行のアドレス範囲が見えます。
+ `Node` ノード達のポインタは `[heap]` 範囲内、 `Snake s` 構造体のアドレスは `[stack]` 範囲内に居ます。
+第 2 章の `&s_on_stack` と `&map` の話の続きです。
+
 
 :::details `pmap` と `pgrep` の解説
 - `pgrep <pattern>`: プロセス名で PID を引く。 `pgrep snake_step3` は名前に `snake_step3` を含むプロセスの PID を全部出す。 シェルの `$(...)` で囲んで他コマンドに渡すのが定番。
@@ -179,9 +207,19 @@ valgrind を抜けて leak も見ましょう。
 
 ## 演習
 
-- **Easy**: `snake_free(&s)` を main の最後から **削除** して `make valgrind`。 `definitely lost: N bytes in M blocks` の N と M はいくつになる? ノード 1 個のサイズ × 残り長さと一致するはず。
-- **Med**: `place_food` のループは「蛇が画面を埋めるとほぼ無限ループになる」設計。蛇の長さが `(ROWS-2)*(COLS-2)` に近づいた時の挙動を観察し、 **配列スキャン → 空きセル列挙 → ランダムに 1 個** に書き直してみよう。
-- **Hard**: `--bug=use-after-free` モードを追加せよ。 `free` した直後の `old_tail->r` を読みに行くコードを書き、 valgrind が `Invalid read of size 1` をどう報告するかを観察。 さらに **AddressSanitizer (`make asan`)** で同じバグを動かし、 出力フォーマットの違いを比較する。
+- **Easy**: `snake_free(&s)` を main の最後から **削除** して `make valgrind`。
+ `definitely lost: N bytes in M blocks` の N と M はいくつになる? ノード 1 個のサイズ × 残り長さと一致するはず。
+
+- **Med**: `place_food` のループは「蛇が画面を埋めるとほぼ無限ループになる」設計。
+蛇の長さが `(ROWS-2)*(COLS-2)` に近づいた時の挙動を観察し、 **配列スキャン → 空きセル列挙 → ランダムに 1 個** に書き直してみよう。
+
+- **Hard**: `--bug=use-after-free` モードを追加せよ。
+ `free` した直後の `old_tail->r` を読みに行くコードを書き、 valgrind が `Invalid read of size 1` をどう報告するかを観察。
+ さらに **AddressSanitizer (`make asan`)** で同じバグを動かし、 出力フォーマットの違いを比較する。
+
 
 ## 次章では
-第 4 章は **Tetris** に切り替わります。蛇は連結リスト 1 本で済みましたが、 Tetris では **次のピースのキュー** という構造を扱う必要があり、 heap の使い方が一段複雑になります。 `valgrind --tool=massif` で **「いつ・何 byte heap を使っているか」** を時系列でグラフにします。
+第 4 章は **Tetris** に切り替わります。
+蛇は連結リスト 1 本で済みましたが、 Tetris では **次のピースのキュー** という構造を扱う必要があり、 heap の使い方が一段複雑になります。
+ `valgrind --tool=massif` で **「いつ・何 byte heap を使っているか」** を時系列でグラフにします。
+

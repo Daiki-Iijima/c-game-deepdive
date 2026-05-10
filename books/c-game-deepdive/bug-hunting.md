@@ -17,7 +17,9 @@ title: "第11章 — gdb と valgrind 実戦: シリーズ中のバグを総ざ�
 - 第 9 章: pipe デッドロック (Roguelike fork)
 - 第 10 章: 構造体直書きで壊れたセーブ
 
-各章で「ツールがどう叫ぶか」を見ましたが、 散らばった知識のままでは 「実際にバグに遭遇した時の手順」 になりません。 本章は **小さな実験ファイル `buggy.c` 1 本** に上記の縮小版を仕込み、 **gdb と valgrind を使った標準手順** を 1 つずつ通します。
+各章で「ツールがどう叫ぶか」を見ましたが、 散らばった知識のままでは 「実際にバグに遭遇した時の手順」 になりません。
+ 本章は **小さな実験ファイル `buggy.c` 1 本** に上記の縮小版を仕込み、 **gdb と valgrind を使った標準手順** を 1 つずつ通します。
+
 
 ## 本章のテーマ: バグの種別 × ツールの相性
 
@@ -32,6 +34,7 @@ title: "第11章 — gdb と valgrind 実戦: シリーズ中のバグを総ざ�
 
 「症状が出た時にどのツールから当てるか」 を選べることが本章のゴール。
 
+
 ## 動かして・壊して・直す
 ```sh
 cd 04_tools/bug_hunting
@@ -44,6 +47,7 @@ make run_uninit                  # → valgrind の Conditional jump on uninitia
 ```
 
 `buggy.c` の中身は意図的に短いので、 `cat buggy.c` してから出力を読むのがおすすめ。
+
 
 ## 観察 1: gdb の最低限フロー
 
@@ -102,6 +106,7 @@ gdb ./buggy core
 
 二重 free の場合は glibc の内部関数で abort するので、 `bt` を辿ると **自分のコード上の `free(p)` 行** に直接届きます。
 
+
 ### live debug
 
 クラッシュを待たずに gdb を仕込む:
@@ -128,7 +133,9 @@ gdb ./buggy
 (gdb) continue
 ```
 
-これで `*p` の値が破壊された瞬間に gdb が止まります。 デッドロック/use-after-free 系で頻用。
+これで `*p` の値が破壊された瞬間に gdb が止まります。
+ デッドロック/use-after-free 系で頻用。
+
 
 ## 観察 2: valgrind を「静か → 騒がしい」順に当てる
 
@@ -140,7 +147,9 @@ valgrind --tool=helgrind ./threaded_app   # race
 valgrind --tool=massif ./tetris_step1     # heap 使用量グラフ (第 4 章)
 ```
 
-`--track-origins=yes` は uninit 系の最強オプション。 **どこで作られた未初期化値が、 どこで使われたか** を全部追ってくれます (代わりに遅い)。
+`--track-origins=yes` は uninit 系の最強オプション。
+ **どこで作られた未初期化値が、 どこで使われたか** を全部追ってくれます (代わりに遅い)。
+
 
 :::details valgrind のツール一覧
 `valgrind --tool=...` で複数のツールを切り替えられます。 デフォルト (省略時) は `memcheck`。
@@ -163,7 +172,8 @@ valgrind --tool=massif ./tetris_step1     # heap 使用量グラフ (第 4 章)
 
 ## 観察 3: pipe デッドロック (第 9 章) を gdb で
 
-第 9 章の AI 連携で `fflush(stdout)` を抜くと、 親の `read` で全プロセスがハングします。 gdb で見るには:
+第 9 章の AI 連携で `fflush(stdout)` を抜くと、 親の `read` で全プロセスがハングします。
+ gdb で見るには:
 
 ```sh
 ps aux | grep rogue_step3        # 親 PID
@@ -175,7 +185,9 @@ gdb -p <子PID>
 (gdb) detach
 ```
 
-両側の `bt` で「親は read(...) 中、 子は printf 内部の write(...) 中、 双方相手の動きを待っている」 が読み取れます。 これがデッドロックの可視化。
+両側の `bt` で「親は read(...) 中、 子は printf 内部の write(...) 中、 双方相手の動きを待っている」 が読み取れます。
+ これがデッドロックの可視化。
+
 
 ## メンタルモデルを整理する: 「叫ぶ瞬間」と「気づく瞬間」 の距離
 
@@ -185,18 +197,30 @@ gdb -p <子PID>
   origin             actual corruption     visible crash
 ```
 
-何も計装が無いと、 私たちが見るのは 「visible crash」 だけ。 そこから origin に戻る作業が **デバッグ**。 ツールは:
+何も計装が無いと、 私たちが見るのは 「visible crash」 だけ。
+ そこから origin に戻る作業が **デバッグ**。
+ ツールは:
 
 - **valgrind / ASan** = corruption の瞬間に叫ぶ → origin との距離が短い
 - **gdb (素)** = visible crash の bt から逆算 → origin との距離が遠い (でも内部状態は全部見える)
 
 両方持っていると、 「**叫ぶ位置**」 を選んで絞り込めます。
 
+
 ## 演習
 
-- **Easy**: `buggy.c` の 4 種類をすべて手で動かし、 各ツールの出力を 1 つずつ自分のメモに貼り付けよ。 「何 byte の何が起きたか」 を 1 行サマリで書く。
-- **Med**: 第 6 章の Tetris (`02_tetris/step3_collision/main.c`) を `gdb -tui` で開き、 `--bug=oob` で gdb を attach。 `watch g_score_history[15]` を仕掛け、 そこを書き換える瞬間に止まることを確認。
-- **Hard**: 第 9 章の Roguelike を `fflush` 削除版に書き換えて起動 → ハングしたら別ターミナルから `gdb -p` で親と子の両方を attach し、 両方の bt を貼り付けてレポート。 「**両プロセスの bt を一画面に並べる**」 のがデッドロック解析の定石。
+- **Easy**: `buggy.c` の 4 種類をすべて手で動かし、 各ツールの出力を 1 つずつ自分のメモに貼り付けよ。
+ 「何 byte の何が起きたか」 を 1 行サマリで書く。
+
+- **Med**: 第 6 章の Tetris (`02_tetris/step3_collision/main.c`) を `gdb -tui` で開き、 `--bug=oob` で gdb を attach。
+ `watch g_score_history[15]` を仕掛け、 そこを書き換える瞬間に止まることを確認。
+
+- **Hard**: 第 9 章の Roguelike を `fflush` 削除版に書き換えて起動 → ハングしたら別ターミナルから `gdb -p` で親と子の両方を attach し、 両方の bt を貼り付けてレポート。
+ 「**両プロセスの bt を一画面に並べる**」 のがデッドロック解析の定石。
+
 
 ## 次章では
-最終章 (第 12 章) は **逆アセンブル**。 自分が書いた C コードがどんな asm に化けたか、 `readelf` でセクションを覗き、 `objdump -d` で `main` を覗き、 `perf stat` で 1 tick あたりの命令数 / cache miss を測ります。 第 5 章の関数ポインタ呼び出しが asm のどこに座っているか、 第 6 章の ASan の毒チェックが本当にインライン展開されているか、 自分の目で確かめます。
+最終章 (第 12 章) は **逆アセンブル**。
+ 自分が書いた C コードがどんな asm に化けたか、 `readelf` でセクションを覗き、 `objdump -d` で `main` を覗き、 `perf stat` で 1 tick あたりの命令数 / cache miss を測ります。
+ 第 5 章の関数ポインタ呼び出しが asm のどこに座っているか、 第 6 章の ASan の毒チェックが本当にインライン展開されているか、 自分の目で確かめます。
+

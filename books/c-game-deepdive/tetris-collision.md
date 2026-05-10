@@ -11,17 +11,26 @@ title: "第6章 — 衝突判定とメモリ事故: AddressSanitizer 初登場"
 
 ## はじめに
 第 5 章の Tetris は **衝突判定が無事に動いていれば** 静かなものでした。
-本章では、その **衝突判定をわざと壊します**。 そして 「壊れた瞬間に叫ぶツール」 を入れます。 名前は **AddressSanitizer**、 略して ASan。
 
-valgrind は前章までで使いました。 ASan は valgrind と何が違うのか? **コンパイル時に仕掛けを埋め込む** タイプの検査ツール、 動作中のオーバヘッドが小さく、 報告内容が valgrind と少し違う。 同じ仮想バグを両方で見て比較するのが本章のメインイベントです。
+本章では、その **衝突判定をわざと壊します**。
+ そして 「壊れた瞬間に叫ぶツール」 を入れます。
+ 名前は **AddressSanitizer**、 略して ASan。
+
+
+valgrind は前章までで使いました。
+ ASan は valgrind と何が違うのか? **コンパイル時に仕掛けを埋め込む** タイプの検査ツール、 動作中のオーバヘッドが小さく、 報告内容が valgrind と少し違う。
+ 同じ仮想バグを両方で見て比較するのが本章のメインイベントです。
+
 
 ## 本章のテーマ: 仕込まれた 2 つのバグ
 
 `02_tetris/step3_collision/main.c` には、 起動引数 `--bug=oob` で 2 種類の事故が同時に発動します。
 
+
 ### バグ 1: 配列外読み (out-of-bounds read)
 
 `try_place_buggy` は、 行/列の境界チェックの **前に** `g_board[nr][nc]` を読みます。
+
 
 ```c
 static int try_place_buggy(int kind, int rot, int r, int c) {
@@ -36,11 +45,16 @@ static int try_place_buggy(int kind, int rot, int r, int c) {
 }
 ```
 
-ピースがスポーン直後 (`g_cur_r = 0`) で、 `BIT_AT(p, i=0, j=...)` のセルが立っていなければ問題は起きません。 しかし I ピースが横向きなら 1 行目だけが立っている (`bit 4-7`)、 J/L/T などスポーン形では 0 行目にもブロックがあり、 **ピースを上にもう 1 段押し戻すような操作 (= 通常はあり得ない) を試した瞬間に `nr < 0` が成立** し、 その時点で `g_board[-1][...]` を読みに行きます。
+ピースがスポーン直後 (`g_cur_r = 0`) で、 `BIT_AT(p, i=0, j=...)` のセルが立っていなければ問題は起きません。
+ しかし I ピースが横向きなら 1 行目だけが立っている (`bit 4-7`)、 J/L/T などスポーン形では 0 行目にもブロックがあり、 **ピースを上にもう 1 段押し戻すような操作 (= 通常はあり得ない) を試した瞬間に `nr < 0` が成立** し、 その時点で `g_board[-1][...]` を読みに行きます。
+
 
 ### バグ 2: グローバル配列の境外書き込み
 
-`g_score_history[16]` というスコア履歴を、 `--bug=oob` 時はインデックスを `mod 16` しないで書き続けます。 100 ピース置けば必ず溢れる。 ASan が **`global-buffer-overflow`** を即報告。
+`g_score_history[16]` というスコア履歴を、 `--bug=oob` 時はインデックスを `mod 16` しないで書き続けます。
+ 100 ピース置けば必ず溢れる。
+ ASan が **`global-buffer-overflow`** を即報告。
+
 
 ## 動かして・壊して・直す
 ### 健全動作の確認 (バグ無し)
@@ -51,7 +65,9 @@ make
 ./tetris_step3
 ```
 
-第 5 章とほぼ同じプレイ感。 スコア表示の右に `bug=off` が見えます。
+第 5 章とほぼ同じプレイ感。
+ スコア表示の右に `bug=off` が見えます。
+
 
 ### ASan ビルドでバグ ON
 
@@ -90,8 +106,11 @@ WRITE of size 8 at 0x55... thread T0
 SUMMARY: AddressSanitizer: global-buffer-overflow main.c:113 in note_score
 ```
 
-最初の事故 (グローバル配列の越境書き) を **行番号レベルで** 指してきます。 「`g_score_history` という名前のグローバル変数の **直後 0 byte** に 8 byte 書こうとした」 と教えてくれます。
+最初の事故 (グローバル配列の越境書き) を **行番号レベルで** 指してきます。
+ 「`g_score_history` という名前のグローバル変数の **直後 0 byte** に 8 byte 書こうとした」 と教えてくれます。
+
 配列のサイズも `(0x55...) of size 128` (= 16 個 × 8 byte) と一致。
+
 
 ### valgrind 同じバグでビルド
 
@@ -100,18 +119,25 @@ make valgrind_bug
 # = valgrind --error-exitcode=1 ./tetris_step3 --bug=oob
 ```
 
-valgrind の `memcheck` は **グローバル変数の越境書き込みを完全には検出しません** (heap と stack には強いが、 静的領域の 16 byte 配列の 1 つ右隣に 8 byte 書く程度では沈黙することがある)。 一方、 `try_place_buggy` の方の **配列外 read** はうっすら反応します:
+valgrind の `memcheck` は **グローバル変数の越境書き込みを完全には検出しません** (heap と stack には強いが、 静的領域の 16 byte 配列の 1 つ右隣に 8 byte 書く程度では沈黙することがある)。
+ 一方、 `try_place_buggy` の方の **配列外 read** はうっすら反応します:
 
 ```
 ==4567== Conditional jump or move depends on uninitialised value(s)
 ==4567==    at 0x4XXXX: try_place_buggy (main.c:91)
 ```
 
-「uninitialised value に依存して分岐した」と。 これは ASan の `global-buffer-overflow` ほどダイレクトな宣言ではありませんが、 「ヒントとして異物がある」 ことを匂わせる、 という違いです。
+「uninitialised value に依存して分岐した」と。
+ これは ASan の `global-buffer-overflow` ほどダイレクトな宣言ではありませんが、 「ヒントとして異物がある」 ことを匂わせる、 という違いです。
+
 
 ## 観察する: ASan の中身
 
-ASan は `-fsanitize=address` でコンパイルすると、 **メモリアクセスのたびに redzone (毒入り領域) の状態を確認** するコードをインライン展開します。 全グローバル変数の前後に毒領域が並び、 そこに触ると即時 `abort()`。 `objdump -d tetris_step3` で `__asan_load*` / `__asan_store*` という symbol が散らばるのが見えます。 第 12 章で逆アセンブルする時にもう一度確認します。
+ASan は `-fsanitize=address` でコンパイルすると、 **メモリアクセスのたびに redzone (毒入り領域) の状態を確認** するコードをインライン展開します。
+ 全グローバル変数の前後に毒領域が並び、 そこに触ると即時 `abort()`。
+ `objdump -d tetris_step3` で `__asan_load*` / `__asan_store*` という symbol が散らばるのが見えます。
+ 第 12 章で逆アセンブルする時にもう一度確認します。
+
 
 | | valgrind | ASan |
 |---|---|---|
@@ -122,6 +148,7 @@ ASan は `-fsanitize=address` でコンパイルすると、 **メモリアク�
 | 学習用途 | 既存バイナリの調査 | 開発中の常用 |
 
 両方使えるとデバッグの解像度が一段上がります。
+
 
 ## メンタルモデルを整理する: redzone
 
@@ -134,13 +161,24 @@ ASan は `-fsanitize=address` でコンパイルすると、 **メモリアク�
                ここに書くと ASan が叫ぶ
 ```
 
-「変数の隙間が貴重なメモリだから埋めなきゃ」ではなく、 **わざと毒の壁を立てる** デバッグ手法です。 ASan を切れば redzone は消え、 通常のメモリレイアウトに戻ります。
+「変数の隙間が貴重なメモリだから埋めなきゃ」ではなく、 **わざと毒の壁を立てる** デバッグ手法です。
+ ASan を切れば redzone は消え、 通常のメモリレイアウトに戻ります。
+
 
 ## 演習
 
 - **Easy**: `make asan` (バグ無し) で起動してフルプレイし、 ASan が **何も叫ばない** ことを確認 (= 健全コードで誤検知がないこと)。
-- **Med**: `try_place_buggy` の中の `if (g_board[nr][nc])` を **safe 版と同じく境界チェック後に動かす** ように 1 行 swap しただけのコードに直し、 ASan が黙ることを確認せよ。 直した版を valgrind に通しても黙ることを確認。
-- **Hard**: ASan を **切った状態 (普通の `make`)** で `--bug=oob` を動かす。 「すぐクラッシュする?」「気づかれず動き続ける?」 「クラッシュ位置と本当の原因の距離は?」 を観察し、 1 段落のレポートにまとめる。 これは「sanitizer 無しの世界での未定義動作の怖さ」を体験する演習。
+
+- **Med**: `try_place_buggy` の中の `if (g_board[nr][nc])` を **safe 版と同じく境界チェック後に動かす** ように 1 行 swap しただけのコードに直し、 ASan が黙ることを確認せよ。
+ 直した版を valgrind に通しても黙ることを確認。
+
+- **Hard**: ASan を **切った状態 (普通の `make`)** で `--bug=oob` を動かす。
+ 「すぐクラッシュする?」「気づかれず動き続ける?」 「クラッシュ位置と本当の原因の距離は?」 を観察し、 1 段落のレポートにまとめる。
+ これは「sanitizer 無しの世界での未定義動作の怖さ」を体験する演習。
+
 
 ## 次章では
-第 7 章は **Roguelike** に切り替わり、 動的なダンジョン生成を実装します。 大きな heap 確保 (`malloc(N * M * sizeof(Tile))`) と、 構造体の **flexible array member** の使い分けを学びます。 ASan/valgrind は引き続き使い、 「大きな heap」 の世界で何が変わるかを見ます。
+第 7 章は **Roguelike** に切り替わり、 動的なダンジョン生成を実装します。
+ 大きな heap 確保 (`malloc(N * M * sizeof(Tile))`) と、 構造体の **flexible array member** の使い分けを学びます。
+ ASan/valgrind は引き続き使い、 「大きな heap」 の世界で何が変わるかを見ます。
+
