@@ -86,6 +86,21 @@ make valgrind
 # 中身: valgrind --leak-check=full --show-leak-kinds=all ./snake_step3 --bug=double-free
 ```
 
+:::details `valgrind --leak-check=full --show-leak-kinds=all` のフラグ解説
+- `valgrind` は **動的バイナリ翻訳** を使ってプロセスを実行しつつ、 メモリアクセス 1 つひとつをシミュレート上で監視するツール。 デフォルトのツール (= `--tool=memcheck`) は invalid read/write、 use-after-free、 leak を捕まえる。
+- `--leak-check=full`: 終了時に「使われていない・到達不能なヒープブロック」を **詳細にスタックトレース付きで** 表示する。 デフォルトの `summary` だと件数しか出ない。
+- `--show-leak-kinds=all`: leak の種別を絞らず全部表示する。 種別は次の 4 つ:
+  - `definitely lost`: ポインタが完全に失われた (= 100% 漏れ)
+  - `indirectly lost`: 別の漏れ経由で連鎖的に到達不能になった
+  - `possibly lost`: ポインタが「中途半端に残っている」
+  - `still reachable`: 終了時にまだ参照可能 (= 漏れではないが解放していない)
+- その他便利フラグ:
+  - `--track-origins=yes`: uninitialised value の **出所** まで追跡 (遅くなる)。
+  - `--error-exitcode=N`: バグ検出時に終了コードを N にする (CI で活躍)。
+  - `--num-callers=N`: スタックトレースの深さ (デフォルト 12)。
+  - `-q`: バグが無ければ無音 (CI 向け)。
+:::
+
 少し動かしてから `q` で抜けると、こんな出力が出ます (抜粋)。
 
 ```
@@ -151,6 +166,16 @@ valgrind を抜けて leak も見ましょう。
 ## 観察 3: heap と stack のアドレス
 
 ゲームを動かす前に、 `pmap $(pgrep snake_step3)` (別ターミナル) で蛇プロセスのメモリマップを覗くと、 `[heap]` 行と `[stack]` 行のアドレス範囲が見えます。 `Node` ノード達のポインタは `[heap]` 範囲内、 `Snake s` 構造体のアドレスは `[stack]` 範囲内に居ます。第 2 章の `&s_on_stack` と `&map` の話の続きです。
+
+:::details `pmap` と `pgrep` の解説
+- `pgrep <pattern>`: プロセス名で PID を引く。 `pgrep snake_step3` は名前に `snake_step3` を含むプロセスの PID を全部出す。 シェルの `$(...)` で囲んで他コマンドに渡すのが定番。
+- `pmap <pid>`: そのプロセスの **仮想アドレス空間のレイアウト** を表示する。 内部では `/proc/<pid>/maps` を整形して読んでいるだけ。 同じ情報を直接 `cat /proc/<pid>/maps` でも見られる。
+- 出力に出てくるラベル:
+  - `[stack]`: メインスレッドのスタック
+  - `[heap]`: `brk()` / `sbrk()` で伸びる典型的な heap 領域 (大きい malloc は `mmap` 経由で別の anonymous マッピングになることもある)
+  - `r-xp /lib/x86_64-linux-gnu/libc.so.6`: 共有ライブラリのコード
+- 別ターミナルで動かしながら見るのがコツ。 ゲームを `q` で抜けるとプロセスは消えるので。
+:::
 
 ## 演習
 

@@ -60,6 +60,31 @@ for (;;) {
 
 `free` / `malloc` / `render` を **メインループの文脈で** 呼んでいるので、 これは安全。
 
+:::details `sigaction` 構造体と SA_RESTART / SA_NOCLDSTOP / SA_SIGINFO
+古い `signal(2)` ではなく `sigaction(2)` を使う理由は、 ハンドラ登録の挙動を細かく制御できるから。
+
+```c
+struct sigaction {
+    void     (*sa_handler)(int);                       // 通常の handler
+    void     (*sa_sigaction)(int, siginfo_t *, void *); // SA_SIGINFO 用拡張 handler
+    sigset_t   sa_mask;                                // handler 中マスクするシグナル集合
+    int        sa_flags;                               // フラグ (下記参照)
+};
+```
+
+主要フラグ:
+
+- `SA_RESTART`: 中断された syscall (`read`, `write`, `wait` など) を自動的に再開させる。 シェルスクリプト的な「気にせず動かしたい」用途で便利。
+- `SA_NOCLDSTOP`: SIGCHLD で **子の停止/再開 (SIGSTOP/SIGCONT) を無視**。 子の終了 (= reap が必要なケース) だけハンドラに来る。 第 9 章で使います。
+- `SA_NOCLDWAIT`: SIGCHLD ハンドラが無くても zombie を残さない (子が即時 reap される)。
+- `SA_SIGINFO`: 拡張ハンドラ `sa_sigaction` を使う。 `siginfo_t` で送信元 PID / UID / 起因アドレスなどが取れる。
+- `SA_RESETHAND`: 1 回呼ばれたらデフォルトに戻る (古い `signal(2)` の挙動)。
+
+`sa_mask` の役割: handler 実行中に **追加でブロックするシグナル集合**。 `sigemptyset(&sa.sa_mask)` を忘れると未初期化のゴミが入って予期せぬブロックになる。 必ず初期化する。
+:::
+
+
+
 ## 実装する
 ```sh
 cd 03_roguelike/step2_signal

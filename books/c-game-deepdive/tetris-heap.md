@@ -54,11 +54,18 @@ make massif
 # 中身: valgrind --tool=massif --massif-out-file=massif.out ./tetris_step1
 ```
 
-数十秒プレイして `q` で抜けると、 同じディレクトリに `massif.out` が出来ます。 `ms_print` で読みます。
-
-```sh
-ms_print massif.out | less
-```
+:::details `valgrind --tool=massif` と `ms_print` の解説
+- `valgrind --tool=massif`: valgrind の中の **ヒーププロファイラ** ツール。 `memcheck` (デフォルト) とは別で、 メモリの「正しさ」ではなく「使用量の時系列」を測る。
+- 仕組み: 一定間隔で `malloc` / `free` の状態をスナップショット化し、 各スナップショットを **どの呼び出し元から確保されたか** とともに記録。
+- 出力: `--massif-out-file=PATH` で指定した バイナリ形式 (テキストだが ms_print 専用) に書き出す。
+- 関連フラグ:
+  - `--threshold=N` (default 1.0%): N% 未満の小さな割り当ては集計しない。
+  - `--detailed-freq=N` (default 10): N スナップショットに 1 回、 関数単位で詳細記録。
+  - `--time-unit=B/ms/i` (default i): 時間軸を「実行命令数」「ミリ秒」「確保バイト数」のどれにするか。
+  - `--pages-as-heap=yes`: heap だけでなく `mmap` ページも heap 扱いに。
+- `ms_print PATH`: 出力ファイルを **ASCII グラフ + スナップショット表** に整形して標準出力に吐く。
+- `massif-visualizer` (別パッケージ) を入れれば GUI でグラフが見られる。
+:::
 
 冒頭にこんな ASCII グラフが出ます:
 

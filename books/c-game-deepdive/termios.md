@@ -110,7 +110,20 @@ make           # snake_step1 が生成される
 strace -e trace=ioctl,read,write ./snake_step1
 ```
 
-`tcsetattr` の正体が `ioctl(0, TCSETSF, {...})` であること、`read(0, buf, 1)` が即座に 0 byte を返してくる (= ノンブロッキングが効いている) ことが目で見えます。
+:::details strace と `-e trace=...` の解説
+- `strace` はプロセスの **すべての syscall を覗き見る** デバッグツール。 内部で `ptrace(PTRACE_SYSCALL, ...)` を使い、 syscall 入口と出口で対象プロセスを止めて引数と戻り値を読む。
+- 何もフィルタを付けないと膨大に出力されるので、 `-e trace=...` で絞り込む:
+  - `-e trace=ioctl,read,write` のように **カンマ区切りで syscall 名を列挙**。
+  - `-e trace=%file` (ファイル系全部)、 `-e trace=%network` (ネットワーク系全部) のような **シンセティックグループ** もある。
+- 他の便利フラグ:
+  - `-f`: 子プロセスも追跡 (`fork` 後の `clone` で生まれた子)。 第 9 章で使います。
+  - `-c`: 終了時に syscall ごとの **回数と消費時間の集計** を表示。
+  - `-p PID`: 既に動いているプロセスにアタッチ。
+  - `-o trace.log`: stdout ではなくファイルに記録。
+- 注意: Docker コンテナ内で使うには `seccomp:unconfined` 権限が要る (本連載の `docker/compose.yml` で許可済み)。
+:::
+
+`tcsetattr` の正体が `ioctl(0, TCSETSF, {...})` であること、`read(0, buf, 1)` が即座に 0 byte を返してくる (= ノンブロッキングが効いている) ことが目で確認できます。
 
 ```
 ioctl(0, TCGETS, {c_iflag=ICRNL|IXON, c_oflag=OPOST|ONLCR, c_lflag=ICANON|ECHO|ISIG, ...}) = 0

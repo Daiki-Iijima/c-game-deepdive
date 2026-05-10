@@ -32,6 +32,14 @@ cd c-game-deepdive
 docker compose -f docker/compose.yml run --rm dev
 ```
 
+:::details `docker compose run --rm dev` の中身
+- `compose -f docker/compose.yml`: 使う compose ファイルを明示。 デフォルト `docker-compose.yml` ではなく `docker/compose.yml` を指している。
+- `run`: サービス (ここでは `dev`) を **その場限りで** 起動するサブコマンド。 長期常駐させる `up` とは違う。
+- `--rm`: コンテナを抜けた瞬間に自動削除。 開発用途では「試したら綺麗に消える」を確保する定番フラグ。
+- `dev`: `compose.yml` で定義したサービス名。 そこに書いた `image` / `volumes` / `command` が読まれてコンテナ起動。
+- 結果: ホストの作業ディレクトリが `/workspace` にマウントされた状態で `bash` プロンプトに入る。 抜ければコンテナは消えるが、 ホスト側のファイルは残る。
+:::
+
 コンテナの中で:
 
 ```sh
@@ -62,6 +70,21 @@ gcc -Wall -Wextra -O0 -g hello.c -o hello
 ./hello
 file ./hello
 ```
+
+:::details gcc のフラグの意味
+- `-Wall`: 一般的な警告を全部有効にする。 「all」と書いてあるが実際は **代表的なものだけ**。
+- `-Wextra`: `-Wall` に含まれない追加の警告 (符号の比較、 未使用引数など)。
+- `-O0`: 最適化レベル 0 = 最適化しない。 デバッガで変数名と行番号がそのまま見えるようにするため、 学習用のデフォルトはこれ。
+- `-g`: デバッグ情報 (DWARF) を実行ファイルに含める。 `gdb` が変数名や行番号を引けるのはこの情報があるから。
+- `-o hello`: 出力ファイル名を指定。 省略すると `a.out` になる。
+:::
+
+:::details `file` コマンドは何を見ている?
+- `file` はファイルの先頭数バイト (= マジックナンバー) と既知のヘッダ構造を比較して、 ファイルの種類を当てる小さなツール。 拡張子は見ない。
+- ELF ファイルの場合は最初の 4 バイトが `\x7f E L F` (= マジック)。 続くバイトでビット幅 (32/64)、 エンディアン (LSB/MSB)、 ABI、 バージョンが分かる。
+- 出力例 `ELF 64-bit LSB pie executable, x86-64`: ELF 形式の 64bit リトルエンディアン、 PIE (位置独立) 実行ファイル、 ターゲットは x86_64 アーキテクチャ。
+- ELF の中身は第 12 章で `readelf` を使って同じ情報をもっと詳細に覗きます。
+:::
 
 `file` の出力で **`ELF 64-bit LSB pie executable, x86-64`** と表示されたら勝ちです。
 ARM64 で出ていたら Docker の platform 指定が効いていません。`docker compose` 経由で起動しているか確認してください。
@@ -94,6 +117,24 @@ gcc -S hello.c -o hello.s
 gcc -c hello.c -o hello.o
 gcc hello.o -o hello
 ```
+
+:::details `gcc -E / -S / -c` をもう少し詳しく
+- `gcc -E hello.c -o hello.i`: **プリプロセス段** で止める。 `#include` の展開、 `#define` のマクロ展開、 `#if` の評価が済んだ生 C ソース (拡張子 `.i`) が出る。 ヘッダがどこまで膨らむかを実感したいときはここで止めて行数を数えると良い。
+- `gcc -S hello.c -o hello.s`: **コンパイル段** で止める。 内部でプリプロセスも走り、 結果は **アセンブリ言語** (`.s` テキスト)。 第 12 章で読みます。
+- `gcc -c hello.c -o hello.o`: **アセンブル段** で止める。 出力は **ELF 再配置可能オブジェクト** (`.o`)。 機械語が入っているが、 シンボルのアドレスが未確定なので単独では実行できない。
+- `gcc hello.o -o hello`: **リンク段** だけを実行。 内部で `ld` を呼んで他のオブジェクト (libc など) と結合し、 実行可能 ELF を作る。
+:::
+
+:::details `readelf -h` の出力ポイント
+- `readelf` は ELF ファイルのメタ情報を読み出す GNU binutils のコマンド。 `objdump` と並ぶ ELF 解剖の二大武器。
+- `-h` (= `--file-header`) は ELF ヘッダ (先頭 64 byte 程度) を人間に読める形で表示する。
+- 重要フィールド:
+  - `Class: ELF64` — 64bit
+  - `Type: REL` (`.o` 段) / `Type: DYN` (PIE 実行ファイル) / `Type: EXEC` (古い non-PIE 実行ファイル)
+  - `Machine: Advanced Micro Devices X86-64` — ターゲット ISA
+  - `Entry point address` — プロセス起動時に最初に飛ぶ命令アドレス (実行ファイルのみ)
+- セクションごとの詳細は `-S` (`--section-headers`) で見れます。 第 12 章でやります。
+:::
 
 `hello.s` を開くと `main:` ラベル直下に `lea`, `call puts`, `xor eax,eax`, `ret` が並んでいます。第 12 章でここに戻ってきます。
 `hello.o` は実行できません (`./hello.o` → `cannot execute binary file`)。再配置情報がまだ「どこに置かれるか分からない」状態だからです。`readelf -h hello.o` の `Type: REL` がそれを物語っています。リンク後は `Type: DYN` (PIE) になります。

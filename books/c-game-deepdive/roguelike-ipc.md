@@ -106,6 +106,19 @@ make strace
 # = strace -f -e trace=clone,fork,pipe,pipe2,dup2,read,write,close ./rogue_step3
 ```
 
+:::details `strace -f` と fork / pipe / dup2 syscall の解説
+- `-f` (= follow forks): `fork`/`clone`/`vfork` で生まれた **子プロセスも追跡** する。 `[pid NNNN]` のプレフィックスが付いて親と子の syscall が混在表示される。 `-f` 無しだと子は無視されるので、 IPC を見るときは必須。
+- `-ff` を併用すると **PID ごとに別ファイル** に出力される (`-o trace.log` と組み合わせて `trace.log.<pid>` 形式)。
+
+syscall 個別:
+- `pipe(int fd[2])` / `pipe2(int fd[2], int flags)`: カーネルにバッファ 1 個と 2 つの fd (`fd[0]` 読み口、 `fd[1]` 書き口) を作る。 `pipe2` の方が `O_CLOEXEC` などのフラグ指定可能で、 glibc の `pipe()` も内部では `pipe2(fd, 0)` を呼んでいる。
+- `clone()`: Linux の汎用プロセス/スレッド生成 syscall。 `fork()` も内部では `clone(SIGCHLD, ...)` で実装。 strace は `fork` と書かず `clone` と表示する。
+- `dup2(int oldfd, int newfd)`: `newfd` を一旦閉じてから `oldfd` の番号を `newfd` に複製する。 `dup2(pipe[0], STDIN_FILENO)` で「pipe の読み口を fd 0 (= stdin) として使う」設定が完了。 子プロセスはこれで `read(0, ...)` でも `fgets(stdin)` でも pipe を読める。
+- `close()`: 不要になった fd を閉じる。 fork 後に **使わない方の pipe 端を閉じない** と、 `read` が EOF を返さず永遠に待つデッドロックの典型原因になる。
+
+第 11 章では、 fflush 抜けでハングしたプロセスを **両方アタッチして bt** する手順を扱います。
+:::
+
 短い抜粋:
 
 ```

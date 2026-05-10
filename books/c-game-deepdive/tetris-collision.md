@@ -61,6 +61,21 @@ make asan_bug
 # → ./tetris_step3 --bug=oob
 ```
 
+:::details `-fsanitize=address,undefined` の解説
+- `-fsanitize=address` (= ASan): メモリアクセスの正しさを **コンパイル時計装** で検査するフラグ。 gcc / clang 両方サポート。
+  - 全グローバル変数、 stack 変数、 heap 確保の前後に **redzone (毒入り領域)** を置く
+  - 毎メモリアクセスで `__asan_load*` / `__asan_store*` を呼び、 redzone にヒットすれば `__asan_report_*` で報告
+  - 検出可能: heap-buffer-overflow / stack-buffer-overflow / global-buffer-overflow / heap-use-after-free / double-free / memory leak (環境変数 `ASAN_OPTIONS=detect_leaks=1`)
+- `-fsanitize=undefined` (= UBSan): 未定義動作の検査。 ASan と組み合わせるのが定番。
+  - 検出可能: 整数オーバーフロー、 0 除算、 NULL ポインタ参照、 配列範囲外、 不正な型変換、 misalignment ほか
+- 両方有効にするには **コンパイル時とリンク時の両方** に `-fsanitize=address,undefined` を渡すこと。 LDFLAGS にも入れる必要がある (本連載の Makefile では両方追加済)。
+- 環境変数で挙動を調整:
+  - `ASAN_OPTIONS=halt_on_error=0` で **エラー後も実行継続** (複数バグを 1 回で出す)
+  - `ASAN_OPTIONS=abort_on_error=1` で **異常終了で `abort()`** (coredump を取りたいとき)
+  - `UBSAN_OPTIONS=print_stacktrace=1` で UBSan 検出時にも stacktrace
+- 注意: `-fsanitize=address` と `-fsanitize=thread` (= TSan) は **同時利用不可**。 race detection をしたい場合は別ビルド。
+:::
+
 少しプレイすると ASan が叫びます (抜粋):
 
 ```

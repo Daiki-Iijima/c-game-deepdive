@@ -97,6 +97,20 @@ offsetof(playtime_ms) = 24
 make demo
 ```
 
+:::details `xxd` / `hexdump` / `od` の使い分け
+バイナリファイルの中身を 16 進で見るツールは複数あります。 ぱっと使えるのは:
+
+- **`xxd file`**: 1 行に 16 byte ずつ、 左側に hex、 右側に ASCII を並べる読みやすい表示。 vim 標準添付。
+  - `xxd -c 8 file`: 1 行 8 byte に変える
+  - `xxd -i file`: C 配列リテラル形式で出す (`unsigned char arr[] = { ... };`) — 埋め込み素材を作るときに便利
+  - `xxd -r dump.txt > file`: 逆変換 (hex dump → バイナリ復元)。 16 進をエディタで書き換えてから戻す、 という雑なバイナリ編集に使える
+- **`hexdump -C file`**: BSD 由来。 出力フォーマットが少し違うが内容は同じ。 `-C` (canonical) が xxd 風表示。
+- **`od -A x -t x1z file`**: POSIX で必ず入っている。 オプションが暗号的だが、 移植性が必要な場面では最有力。
+- **`readelf -x .rodata file`** / **`objdump -s file`**: ELF の section だけを hex dump する用途。 第 12 章で再び。
+
+本連載では基本 `xxd` 推し。 Docker イメージにも入っています。
+:::
+
 実際の出力 (筆者の x86_64 環境):
 
 ```

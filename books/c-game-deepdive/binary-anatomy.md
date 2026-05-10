@@ -51,6 +51,26 @@ make
 make readelf
 ```
 
+:::details `readelf` のフラグ早見表
+GNU binutils の ELF 観察ツール。 オプションが多いが、 連載中に使うのはこのあたり。
+
+| フラグ | 出すもの |
+|---|---|
+| `-h` (`--file-header`) | ELF ヘッダ (先頭 64B) |
+| `-l` (`--program-headers`) | program header (= 実行時 segment 配置情報) |
+| `-S` (`--section-headers`) | section header (= ファイル上の構造) |
+| `-s` (`--symbols`) | 全シンボル表 (`.symtab` + `.dynsym`) |
+| `--dyn-syms` | 動的シンボルだけ (`.dynsym`) |
+| `-d` (`--dynamic`) | `.dynamic` セクション (DT_NEEDED 等) |
+| `-r` (`--relocs`) | 再配置情報 |
+| `-n` (`--notes`) | ELF NOTE (build-id など) |
+| `-x SECTION` | section の hex dump |
+| `-p SECTION` | section を ASCII string として表示 |
+| `-W` | wide 出力 (折り返さず横長表示) |
+
+`objdump -h file` でも section header は見られるが、 **ファイル/プログラム双方の表現を区別して出してくれる** のは readelf の方が読みやすい。
+:::
+
 代表的なセクションが並びます。
 
 ```
@@ -69,6 +89,28 @@ make readelf
 ```sh
 make disas
 ```
+
+:::details `objdump` のフラグ早見表
+逆アセンブル + ELF 観察ツール。 readelf と機能が一部重なるが、 **逆アセンブルは objdump 一択**。
+
+| フラグ | 出すもの |
+|---|---|
+| `-d` (`--disassemble`) | 全実行可能 section を逆アセンブル |
+| `--disassemble=FUNC` | 特定関数だけ逆アセンブル (本連載で多用) |
+| `-D` | データ section も含めて全部逆アセンブル |
+| `-S` (`--source`) | 逆アセンブルにソース行を混ぜる (`-g` 付きビルド前提) |
+| `-l` (`--line-numbers`) | 行番号付き |
+| `-h` | section header (readelf -S と類似) |
+| `-s` (`--full-contents`) | section の完全 hex dump |
+| `-t` | シンボルテーブル (`nm` と類似) |
+| `-r` | 再配置エントリ |
+| `-M intel` | Intel 構文で出す (デフォルトは AT&T)。 個人的には Intel 派 |
+| `-C` (`--demangle`) | C++ シンボル名のマングルを解除 |
+
+組み合わせの定番:
+- `objdump -d -M intel --disassemble=main prog`: main を Intel 構文で逆アセンブル
+- `objdump -dS prog | less`: ソースと asm を交互に並べて読む (デバッグ用)
+:::
 
 `-O2` 最適化版で `dispatch` を見ると、 `OPS[idx & 3](...)` 部分がこんな asm に変身します (x86_64):
 
@@ -91,6 +133,29 @@ make disas
 make perf
 # = perf stat -e instructions,cycles,L1-dcache-load-misses ./sample_O2 1000000
 ```
+
+:::details `perf` の主要サブコマンド
+Linux カーネルの **performance counter (PMU)** を直接叩くツール。 `linux-tools-generic` で入れる。 macOS 由来の Docker Desktop だと一部のイベントが `<not supported>` になる点は第 0 章で注意済。
+
+| サブコマンド | 何ができるか |
+|---|---|
+| `perf stat ./prog` | 全期間の集計値 (instructions, cycles, IPC, branch-miss など) |
+| `perf stat -e EVENT,EVENT ./prog` | 計測する PMU イベントを絞る (本章で使用) |
+| `perf record ./prog` | サンプリングプロファイル (`perf.data` を吐く) |
+| `perf report` | `perf.data` をテキストで読む (関数別 hot 順) |
+| `perf annotate FUNC` | 関数を asm ごとに hot 行ハイライト |
+| `perf top` | 動いているシステムの hot 関数をリアルタイム表示 (`top` の関数版) |
+| `perf list` | 利用可能な PMU イベント名の一覧 |
+
+代表的な `-e` イベント:
+- `instructions`, `cycles` → IPC (instructions per cycle)
+- `branches`, `branch-misses` → 分岐予測ヒット率
+- `L1-dcache-loads`, `L1-dcache-load-misses` → L1 キャッシュミス率
+- `LLC-loads`, `LLC-load-misses` → 最終キャッシュ (L3) ミス
+- `task-clock`, `context-switches` → スケジューリングコスト
+
+権限: 普通のユーザでは `kernel.perf_event_paranoid >= 2` だと一部イベントがブロックされる。 学習用なら `sudo sysctl kernel.perf_event_paranoid=-1` で全解放。
+:::
 
 実 Linux マシン (or Codespaces) ならこんな出力:
 

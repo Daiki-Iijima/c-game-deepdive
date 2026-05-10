@@ -141,6 +141,33 @@ cat /proc/self/maps | grep -E '\[stack\]|\[heap\]'
 
 `[stack]` 行と `[heap]` 行のアドレス範囲を、上で出た `&s_on_stack` / `&map` と照らし合わせてみてください。
 
+:::details `/proc/self/maps` の中身
+Linux の擬似ファイルシステム `/proc` の中で、 各プロセスの仮想アドレス空間を 1 行 1 領域で出してくれるテキストファイル。 `self` は呼び出し元プロセス自身を指す symlink。
+
+各行のフォーマット:
+
+```
+55c19f7e2000-55c19f7e3000 r--p 00000000 fd:00 1234567 /usr/bin/cat
+↑開始 - 終了            ↑   ↑       ↑     ↑       ↑
+                       perm offset  dev   inode   pathname
+```
+
+- **アドレス範囲**: その mapping の仮想アドレス開始・終了 (16進)
+- **perm**: 読み (r) 書き (w) 実行 (x) と private/shared (p/s) の組合せ
+  - `r-xp`: 共有ライブラリのコード segment 等
+  - `rw-p`: heap や stack
+  - `r--p`: ELF の `.rodata`
+- **offset**: バックエンドファイルのどこから mapping したか
+- **dev / inode**: デバイス番号と inode (anonymous mapping は 00:00 0)
+- **pathname**: マップ元ファイル、 もしくは特殊ラベル
+  - `[heap]`: brk/sbrk による heap
+  - `[stack]`: メインスレッドのスタック
+  - `[vdso]`: vDSO (高速 syscall 用の特殊 mapping)
+  - `[anon]` or 空: anonymous (= ファイル裏付け無し、 大きな malloc などで使われる)
+
+別プロセスは `/proc/<pid>/maps` で同様に見える (= `pmap` の出力源)。
+:::
+
 ## メンタルモデルを整理する
 
 ```
