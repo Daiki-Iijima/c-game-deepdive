@@ -14,6 +14,12 @@
 - **記事リポジトリ**: [Daiki-Iijima/zenn](https://github.com/Daiki-Iijima/zenn) — `books/c-game-deepdive/` 配下に各章の `.md` と `config.yaml`
 - **コードリポジトリ**: 本リポジトリ — `00_intro/` `01_snake/` `02_tetris/` `03_roguelike/` `04_tools/` 配下の C ソースと Makefile
 
+### 前提辞典 (intro)
+
+連載全体で前提扱いになる **64 語の語彙** (A: C 設計論 / B: 文字・バイト / C: stdio / D: POSIX・syscall / E: signal / F: TTY / G: 調査道具) は **[第 0 章 intro の「前提辞典」 セクション](https://github.com/Daiki-Iijima/zenn/blob/main/books/c-game-deepdive/intro.md#%E5%89%8D%E6%8F%90%E8%BE%9E%E5%85%B8)** にまとめてあります。 通読不要・拾い読み前提です。
+
+各章の冒頭で「**本章の前提**」 として該当項目 (A2, B7, E4 等) を列挙しているので、 知らない語だけ折りたたみを開いて辞書代わりに使ってください。
+
 両者の対応関係:
 
 | # | Zenn slug | コード |

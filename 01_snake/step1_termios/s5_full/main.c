@@ -1,5 +1,5 @@
 /*
- * 01_snake/step1_termios/main.c
+ * 01_snake/step1_termios/s5_full/main.c
  * --------------------------------------------------------------------------
  * 第 1 章のゴール:
  *   termios を raw mode に切り替えて、 矢印キーで 1 文字 (@) を画面上で動かす。
@@ -7,6 +7,13 @@
  *
  * 章本文と対応するため、 ここでは敢えて lib/tty.h を使わず実装を main.c の中に
  * 全部展開している。 第 2 章以降は lib/tty を使う。
+ *
+ * 記事との対応 (zenn books/c-game-deepdive/termios.md Step 5/5):
+ *   Step 5a (グローバル状態 + restore)  → 下記 "----- raw mode 復元 -----" ブロック
+ *   Step 5b (signal handler on_signal)   → 下記 "----- signal handler -----" ブロック
+ *   Step 5c (enter_raw 完全版)            → 下記 "----- raw mode 設定 -----" ブロック
+ *   Step 5d (typedef enum + read_key)     → 下記 "----- キー入力 -----" ブロック
+ *   Step 5e (draw_at + msleep + main)     → 下記 "----- 描画 / ms スリープ / メインループ -----"
  *
  * 使う C 機能 / 標準ライブラリ / syscall (初出):
  *   - struct, typedef enum   : 構造体定義 / 列挙型定義
@@ -30,14 +37,14 @@
 #include <time.h>
 #include <unistd.h>
 
-/* ---- グローバル状態 (このファイル内でしか見えない) ---------------------- */
+/* ---- グローバル状態 (このファイル内でしか見えない) [記事 Step 5a] ---------- */
 
 /* g_orig: raw mode に入る前の termios 設定を退避する場所。
    "g_" prefix は global の意味 (規則ではなく筆者の慣例)。 */
 static struct termios g_orig;
 static int            g_raw = 0;  /* raw mode 中なら 1 */
 
-/* ---- raw mode 復元 -------------------------------------------------- */
+/* ---- raw mode 復元 [記事 Step 5a: restore] -------------------------- */
 
 /* atexit と signal の両方から呼ばれる関数。 何度呼ばれても安全。 */
 static void restore(void) {
@@ -61,6 +68,7 @@ static void restore(void) {
     g_raw = 0;
 }
 
+/* ---- signal handler [記事 Step 5b: on_signal] ----------------------- */
 /* 注: tcsetattr / write は厳密には async-signal-safe ではない (POSIX signal-safety(7))。
    緊急復元としては実用上動くが、 第 8 章 (Roguelike signal) で正しい signal-safe な書き方を扱う。
    ここでは「終了処理を取り戻すための割り切り」として目を瞑る。 */
@@ -72,7 +80,7 @@ static void on_signal(int sig) {
     raise(sig);             /* 自分自身に signal を再送 = kill(getpid(), sig) と等価 */
 }
 
-/* ---- raw mode 設定 -------------------------------------------------- */
+/* ---- raw mode 設定 [記事 Step 5c: enter_raw] ------------------------ */
 
 static void enter_raw(void) {
     /* 現在の端末設定を g_orig に退避。 失敗したら即座に exit。 */
@@ -120,7 +128,7 @@ static void enter_raw(void) {
     (void)write(STDOUT_FILENO, hide, sizeof(hide) - 1);
 }
 
-/* ---- キー入力 ------------------------------------------------------- */
+/* ---- キー入力 [記事 Step 5d: typedef enum Key + read_key] ----------- */
 
 /* 矢印キーは ESC `[` `A/B/C/D` の 3 byte シーケンス。
    raw mode では「上矢印」 というキーは無く、 ターミナルが 3 byte を順に送る。 */
@@ -153,7 +161,7 @@ static Key read_key(void) {
     }
 }
 
-/* ---- 描画 ----------------------------------------------------------- */
+/* ---- 描画 [記事 Step 5e: draw_at] ----------------------------------- */
 
 /* 指定位置に 1 文字書く。
    snprintf(buf, size, fmt, ...):
@@ -165,7 +173,7 @@ static void draw_at(int row, int col, char ch) {
     if (n > 0) (void)write(STDOUT_FILENO, buf, (size_t)n);
 }
 
-/* ---- ms スリープ ---------------------------------------------------- */
+/* ---- ms スリープ [記事 Step 5e: msleep] ----------------------------- */
 
 /* nanosleep(req, rem):
      ナノ秒精度のスリープ syscall。
@@ -176,7 +184,7 @@ static void msleep(int ms) {
     nanosleep(&ts, NULL);
 }
 
-/* ---- メインループ --------------------------------------------------- */
+/* ---- メインループ [記事 Step 5e: main] ------------------------------ */
 
 int main(void) {
     enter_raw();
