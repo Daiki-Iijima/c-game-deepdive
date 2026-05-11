@@ -9,40 +9,28 @@
 
 ## 連載
 
-このリポジトリは **Zenn book** としてそのまま公開できる構成です。
+本のテキスト (Zenn book) は別リポジトリで管理しています:
 
-```sh
-npm install                            # zenn-cli を初回だけ取得
-npx zenn preview --port 8000           # http://localhost:8000 で本のプレビュー
-npx zenn list:chapters c-game-deepdive # 章一覧
-```
+- **記事リポジトリ**: [Daiki-Iijima/zenn](https://github.com/Daiki-Iijima/zenn) — `books/c-game-deepdive/` 配下に各章の `.md` と `config.yaml`
+- **コードリポジトリ**: 本リポジトリ — `00_intro/` `01_snake/` `02_tetris/` `03_roguelike/` `04_tools/` 配下の C ソースと Makefile
 
-ソース:
-- 本のメタ情報: `books/c-game-deepdive/config.yaml`
-- 各章の本文: `books/c-game-deepdive/{slug}.md`
-- 章で参照するコード: `00_intro/` `01_snake/` `02_tetris/` `03_roguelike/` `04_tools/`
-
-公開フロー (Zenn と GitHub を連携している前提):
-
-1. このリポジトリを GitHub に push
-2. Zenn の [GitHub 連携](https://zenn.dev/zenn/articles/connect-to-github) で本リポジトリを登録
-3. `books/c-game-deepdive/config.yaml` の `published: true` に変更して push
+両者の対応関係:
 
 | # | Zenn slug | コード |
 |---|---|---|
-| 0 | [intro](books/c-game-deepdive/intro.md) | `00_intro/` |
-| 1 | [termios](books/c-game-deepdive/termios.md) | `01_snake/step1_termios/{s1_scanf,s2_canon,s3_echo,s4_isig,s5_full}/` |
-| 2 | [snake-array](books/c-game-deepdive/snake-array.md) | `01_snake/step2_array/` |
-| 3 | [snake-list](books/c-game-deepdive/snake-list.md) | `01_snake/step3_linkedlist/` |
-| 4 | [tetris-heap](books/c-game-deepdive/tetris-heap.md) | `02_tetris/step1_heap/` |
-| 5 | [tetris-bitwise](books/c-game-deepdive/tetris-bitwise.md) | `02_tetris/step2_bitwise/` |
-| 6 | [tetris-collision](books/c-game-deepdive/tetris-collision.md) | `02_tetris/step3_collision/` |
-| 7 | [roguelike-dungeon](books/c-game-deepdive/roguelike-dungeon.md) | `03_roguelike/step1_map/` |
-| 8 | [roguelike-signal](books/c-game-deepdive/roguelike-signal.md) | `03_roguelike/step2_signal/` |
-| 9 | [roguelike-ipc](books/c-game-deepdive/roguelike-ipc.md) | `03_roguelike/step3_ipc/` |
-| 10 | [roguelike-save](books/c-game-deepdive/roguelike-save.md) | `03_roguelike/step4_save/` |
-| 11 | [bug-hunting](books/c-game-deepdive/bug-hunting.md) | `04_tools/bug_hunting/` |
-| 12 | [binary-anatomy](books/c-game-deepdive/binary-anatomy.md) | `04_tools/binary_anatomy/` |
+| 0 | intro | `00_intro/` |
+| 1 | termios | `01_snake/step1_termios/{s1_scanf,s2_canon,s3_echo,s4_isig,s5_full}/` |
+| 2 | snake-array | `01_snake/step2_array/` |
+| 3 | snake-list | `01_snake/step3_linkedlist/` |
+| 4 | tetris-heap | `02_tetris/step1_heap/` |
+| 5 | tetris-bitwise | `02_tetris/step2_bitwise/` |
+| 6 | tetris-collision | `02_tetris/step3_collision/` |
+| 7 | roguelike-dungeon | `03_roguelike/step1_map/` |
+| 8 | roguelike-signal | `03_roguelike/step2_signal/` |
+| 9 | roguelike-ipc | `03_roguelike/step3_ipc/` |
+| 10 | roguelike-save | `03_roguelike/step4_save/` |
+| 11 | bug-hunting | `04_tools/bug_hunting/` |
+| 12 | binary-anatomy | `04_tools/binary_anatomy/` |
 
 ## 動かす
 
