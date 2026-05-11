@@ -83,6 +83,14 @@ int main(void) {
 
 `#include <termios.h>` も `tcgetattr` も登場しません。 ふつうの C プログラムです。
 
+:::details `<stdio.h>` と `printf` / `scanf` / `fflush` / `fprintf` の最小解説
+- **`<stdio.h>`** — 標準入出力ライブラリのヘッダ。 stdin/stdout/stderr の `FILE*` と、 `printf`/`scanf`/`fopen`/`fread`/`fwrite` 等を提供。 内部で `FILE*` 構造体がバッファを抱えているので、 `read(2)`/`write(2)` syscall と違って **バッファリングされた I/O** になります。
+- **`printf("...", ...)`** — 書式付き出力。 内部で stdout に書きます。 stdout が **行バッファ** (端末の場合) なので、 **改行 `\n` が来るまで実際の `write(2)` syscall は呼ばれません**。 だから改行のないプロンプト (`"press a key:"`) はそのままだと画面に出ません。
+- **`fflush(stdout)`** — 上記バッファを **強制的に flush** して中身を `write(2)` に流す。 改行なしのプロンプトを表示させるために必須。 `fflush(NULL)` で全 stdio FILE* を一括 flush できます。
+- **`scanf(" %c", &c)`** — 書式付き入力。 `" %c"` の **先頭スペース** は「空白文字 (改行/タブ/スペース) を読み飛ばす」 指示。 これを書かないと、 前回の read で残った `\n` を拾って即返ってきてしまう罠があります。 戻り値は **正しく読めた項目数**。
+- **`fprintf(stderr, "...")`** — stderr に書く版。 stderr は **無バッファ** (端末の場合) なので即時表示されます。 エラーメッセージは慣習として stderr に出します (シェルの `2>` でリダイレクトできるよう)。
+:::
+
 ### ビルドして動かす
 
 ```sh
@@ -171,6 +179,52 @@ int main(void) {
 
 :::message
 **VMIN=1 / VTIME=0 を選んだ理由**: この step は「キーを押すまで待つ」 ことを示したいので、 `read` がブロックする設定 (= 最低 1 byte 来るまで返らない) にします。 Step 5 では「60 fps メインループを回したい」 ため `VMIN=0` (即時 return) に切り替えます。
+:::
+
+:::details `<termios.h>` / `<unistd.h>` ヘッダの最小解説
+- **`<termios.h>`** — POSIX 端末制御。 `struct termios`、 `tcgetattr/tcsetattr`、 ビットフラグ定数 (`ICANON`/`ECHO`/`ISIG`/...)、 `c_cc[]` 用の添字定数 (`VMIN`/`VTIME`) を提供。 標準 C ではなく **POSIX** の世界の住人。 Linux/macOS では使えるが Windows ではそのままは使えません。
+- **`<unistd.h>`** — POSIX 環境の基本。 `read`/`write`/`close`/`dup` 等の syscall ラッパと、 `STDIN_FILENO` (=0), `STDOUT_FILENO` (=1), `STDERR_FILENO` (=2) の定数を提供。
+- 本章の Makefile で `-D_POSIX_C_SOURCE=200809L` を渡しているのは、 glibc にこれらの POSIX 拡張を有効化させるためです (素のままだと `sigaction` 等が見えない処理系がある)。
+:::
+
+:::details `tcgetattr` / `tcsetattr` のシグネチャと TCSAFLUSH
+```c
+int tcgetattr(int fd, struct termios *termios_p);
+int tcsetattr(int fd, int optional_actions, const struct termios *termios_p);
+```
+- **`tcgetattr`**: 指定 fd (端末) の現在の termios 設定を `termios_p` に書き出す。 失敗時 -1、 `errno` に詳細。 fd が端末でないと `ENOTTY` (= `Inappropriate ioctl for device`) になります (パイプ越しに動かしたときの典型エラー)。
+- **`tcsetattr`**: 設定を適用する。 第 2 引数の選択:
+  - **`TCSANOW`** — 即時適用
+  - **`TCSADRAIN`** — 出力キューが捌けてから適用 (出力途中に設定を変えない)
+  - **`TCSAFLUSH`** — 出力キューを捌き、 **入力キューを破棄してから適用** ← 本章で使う
+- 本章で `TCSAFLUSH` を選ぶ理由: 退避前にキューに残っていたバイトを raw mode 突入後に拾ってしまう事故を防げる (例: ターミナルが先読みで送ってきた ESC シーケンスの残骸など)。
+- 「正体」 は ioctl: `tcsetattr` は内部で `ioctl(fd, TCSETSF, ...)` を呼ぶただのラッパ。 strace で見ると ioctl で出てきます (章末で観察します)。
+:::
+
+:::details `read(2)` syscall と `perror`
+```c
+ssize_t read(int fd, void *buf, size_t count);
+void    perror(const char *s);
+```
+- **`read`**: count バイト読む syscall。 stdio (`fgets`/`getc`) と違ってバッファリング無し。 戻り値:
+  - **正**: 実際に読んだバイト数 (要求した count 未満のこともある)
+  - **0**: EOF (パイプ閉じ等)。 端末でも `VMIN=0/VTIME=0` で「入力なし」 のときに 0 が返る
+  - **負 (-1)**: エラー。 `errno` に詳細 (`EINTR`, `EAGAIN`, ...)
+- `ssize_t` は signed の `size_t` (負を表せる型)。
+- **`perror("label")`**: 直前の `errno` を `strerror(errno)` 経由で読みやすい文字列にして stderr に出す。 `<stdio.h>` 由来 (POSIX ではなく標準 C)。 例えば `tcgetattr` 失敗時 `perror("tcgetattr")` で `tcgetattr: Inappropriate ioctl for device` のように出る。
+:::
+
+:::details `VMIN` / `VTIME` の組み合わせ早見表
+`c_cc[VMIN]` と `c_cc[VTIME]` の値で `read(2)` の挙動が決まります (ICANON OFF のとき有効):
+
+| `VMIN` | `VTIME` | 挙動 |
+|--------|---------|------|
+| 0 | 0 | **即時 return** (= ノンブロッキング)。 ある分だけ読む、 無ければ 0 byte で帰る ← s5_full |
+| 0 | >0 | タイムアウト付きノンブロッキング。 VTIME × 0.1 秒待って何か来れば読み、 来なければ 0 byte |
+| >0 | 0 | **ブロック**。 最低 VMIN byte 来るまで返らない ← s2_canon, s3_echo, s4_isig |
+| >0 | >0 | 最初の 1 byte が来てから VTIME × 0.1 秒以内に追加が来なければ return (= キーシーケンスのタイムアウト用) |
+
+ESC シーケンス (`\x1b[A`) を「届かなかった ESC 単独キー」 と区別したい場合は最後のモード (`VMIN=1, VTIME=1`) が便利。 本章の演習 Med で扱います。
 :::
 
 ### ビルドして動かす
@@ -403,6 +457,48 @@ static void enter_raw(void) {
 ```
 
 全文 (矢印キーパース、 メインループ含む) は `s5_full/main.c` を参照。
+
+:::details `write(2)` / `snprintf` の最小解説
+```c
+ssize_t write(int fd, const void *buf, size_t count);
+int     snprintf(char *buf, size_t size, const char *fmt, ...);
+```
+- **`write`**: `read` の出力版 syscall。 `printf` 等の stdio と違ってバッファリング無し = **signal handler や緊急復元から呼んでも安全** (async-signal-safe)。 本章では `restore` 関数や `draw_at` で `write(STDOUT_FILENO, ...)` を直に呼んでいます。 戻り値は実際に書いたバイト数 (count 未満のことあり)。 `sizeof(seq) - 1` で末尾の `'\0'` を除いたバイト数を渡すイディオム。
+- **`snprintf`**: `printf` 系の安全版。 buf に最大 `size` バイトまで書き、 必ず終端 `'\0'` を付ける。 戻り値は **「もし size 制限が無ければ書き込んだはずのバイト数」** (= 切り詰められたかどうか分かる)。 char バッファに ANSI エスケープシーケンスを組み立てる用途で本章では多用します。
+:::
+
+:::details `atexit` / `sigaction` / `raise` / `signal` の最小解説
+```c
+int  atexit(void (*function)(void));
+int  sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
+int  raise(int sig);
+void (*signal(int sig, void (*handler)(int)))(int);   /* 古い API */
+```
+- **`atexit(fn)`**: 正常終了 (`return from main` / `exit(3)`) 時に呼ぶ関数を登録。 最大 32 個までスタックに積めて、 **LIFO 順** で呼ばれます。 `_exit(2)` や signal で死ぬときは呼ばれません (= だから signal handler が別途必要)。
+- **`sigaction(sig, &sa, &old)`**: signal handler 登録の **現代版 API**。 古い `signal(2)` より挙動が POSIX で厳密に定義されている (`signal` は処理系依存の歴史的バグがある)。 `struct sigaction` のフィールド:
+  - `sa_handler` — ハンドラ関数ポインタ
+  - `sa_flags` — `SA_RESTART` (handler 復帰後の syscall 自動再開) など
+  - `sa_mask` — handler 実行中にブロックする signal 集合 (`sigemptyset` で空集合に初期化)
+- **`raise(sig)`**: 自プロセスに signal を送る (= `kill(getpid(), sig)`)。 本章ではハンドラ内で `signal(sig, SIG_DFL); raise(sig);` イディオムを使い、 **デフォルト動作 (= 死ぬ) を呼び戻している**。 こうすることで終了コードが 128+sig (SIGINT なら 130) と正しくなり、 シェルの `$?` を見るスクリプトが期待通り動きます。
+- **`signal(sig, SIG_DFL)`**: 古い API。 ここではハンドラ解除に使うだけなので簡易に流用しています (`sigaction` で `sa_handler=SIG_DFL` でも可)。
+- 注意: 本章末の signal-safety 警告にあるとおり、 ハンドラ内で `tcsetattr` を呼ぶのは POSIX 厳密には NG。 本章は「実用上端末を救えるので踏む」 立場。 第 8 章 (Roguelike signal) で安全な書き方を扱います。
+:::
+
+:::details `<time.h>` と `nanosleep` (s5_full の `msleep`)
+```c
+struct timespec { time_t tv_sec; long tv_nsec; };   /* nsec は 1/10億 秒 */
+int nanosleep(const struct timespec *req, struct timespec *rem);
+```
+- s5_full のメインループは `msleep(16)` (≈ 60 fps) でスリープしますが、 中身は `nanosleep` の薄いラッパ:
+  ```c
+  static void msleep(int ms) {
+      struct timespec ts = { ms / 1000, (ms % 1000) * 1000000L };
+      nanosleep(&ts, NULL);
+  }
+  ```
+- `tv_nsec` の単位は **ナノ秒 (1/10億 秒)**。 ミリ秒に変換するには `× 1,000,000` (= `1000000L`)。
+- 第 2 引数 `rem` は signal で起こされたときの「残り時間」 を書き戻す先。 今回は不要なので NULL。
+:::
 
 ### `VMIN=0` への切り替えが必要な理由
 
