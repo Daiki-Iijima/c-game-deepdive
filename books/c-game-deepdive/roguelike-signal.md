@@ -3,7 +3,7 @@ title: "第8章 — SIGWINCH を捕まえる: signal handler の作法 (async-si
 ---
 
 :::message
-本連載で書くコード一式は **[GitHub: Daiki-Iijima/c-game-deepdive](https://github.com/Daiki-Iijima/c-game-deepdive)** にあります。本文中で `01_snake/step1_termios/main.c` のように参照する path はすべてそのリポ内のファイルです。
+本連載で書くコード一式は **[GitHub: Daiki-Iijima/c-game-deepdive](https://github.com/Daiki-Iijima/c-game-deepdive)** にあります。本文中で `01_snake/step1_termios/s5_full/main.c` のように参照する path はすべてそのリポ内のファイルです。
 :::
 
 

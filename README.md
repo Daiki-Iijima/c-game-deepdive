@@ -31,7 +31,7 @@ npx zenn list:chapters c-game-deepdive # 章一覧
 | # | Zenn slug | コード |
 |---|---|---|
 | 0 | [intro](books/c-game-deepdive/intro.md) | `00_intro/` |
-| 1 | [termios](books/c-game-deepdive/termios.md) | `01_snake/step1_termios/` |
+| 1 | [termios](books/c-game-deepdive/termios.md) | `01_snake/step1_termios/{s1_scanf,s2_canon,s3_echo,s4_isig,s5_full}/` |
 | 2 | [snake-array](books/c-game-deepdive/snake-array.md) | `01_snake/step2_array/` |
 | 3 | [snake-list](books/c-game-deepdive/snake-list.md) | `01_snake/step3_linkedlist/` |
 | 4 | [tetris-heap](books/c-game-deepdive/tetris-heap.md) | `02_tetris/step1_heap/` |
@@ -51,7 +51,7 @@ npx zenn list:chapters c-game-deepdive # 章一覧
 ```sh
 docker compose -f docker/compose.yml run --rm dev
 # 中に入ったら:
-cd 01_snake/step1_termios
+cd 01_snake/step1_termios/s5_full   # 第 1 章は 5 step に分割、 s5_full が完成版
 make run
 ```
 
@@ -63,7 +63,7 @@ make run
 
 ```sh
 ./dx                                # コンテナへ bash で入る (初回は up -d まで自動)
-./dx make -C 01_snake/step1_termios run
+./dx make -C 01_snake/step1_termios/s5_full run
 ./dx make -C 01_snake/step3_linkedlist valgrind
 ./dx make -C 02_tetris/step3_collision asan_bug
 docker compose -f docker/compose.yml down   # 撤収
@@ -90,7 +90,7 @@ docker compose -f docker/compose.yml down   # 撤収
 
 ```sh
 sudo apt install build-essential gdb valgrind strace ltrace binutils elfutils linux-tools-generic
-make -C 01_snake/step1_termios run
+make -C 01_snake/step1_termios/s5_full run
 ```
 
 macOS ホスト直接ビルドは想定しません (Docker を使ってください)。

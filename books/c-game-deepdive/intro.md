@@ -3,7 +3,7 @@ title: "第0章 — 環境構築とゲームループ: なぜ Docker amd64 を�
 ---
 
 :::message
-本連載で書くコード一式は **[GitHub: Daiki-Iijima/c-game-deepdive](https://github.com/Daiki-Iijima/c-game-deepdive)** にあります。本文中で `01_snake/step1_termios/main.c` のように参照する path はすべてそのリポ内のファイルです。
+本連載で書くコード一式は **[GitHub: Daiki-Iijima/c-game-deepdive](https://github.com/Daiki-Iijima/c-game-deepdive)** にあります。本文中で `01_snake/step1_termios/s5_full/main.c` のように参照する path はすべてそのリポ内のファイルです。
 :::
 
 
@@ -40,7 +40,7 @@ docker compose -f docker/compose.yml run --rm dev
 ```
 
 :::message
-**ホストの nvim/エディタを使い続けたい人へ**: リポジトリ直下に `./dx` というラッパスクリプトを置いてあります。 Mac の nvim から `./dx make -C 01_snake/step1_termios` のように打つと、 中身は **Docker コンテナ内** で `make` が走ります。 章本文は `docker compose run --rm dev` で中に入って手で叩く前提で書いてありますが、 慣れてきたら `./dx` 経由の方が往復が速いです。 詳しくは [README](https://github.com/Daiki-Iijima/c-game-deepdive#ハイブリッド開発-mac-の-nvim--docker-でビルド) を。
+**ホストの nvim/エディタを使い続けたい人へ**: リポジトリ直下に `./dx` というラッパスクリプトを置いてあります。 Mac の nvim から `./dx make -C 01_snake/step1_termios/s5_full` のように打つと、 中身は **Docker コンテナ内** で `make` が走ります。 章本文は `docker compose run --rm dev` で中に入って手で叩く前提で書いてありますが、 慣れてきたら `./dx` 経由の方が往復が速いです。 詳しくは [README](https://github.com/Daiki-Iijima/c-game-deepdive#ハイブリッド開発-mac-の-nvim--docker-でビルド) を。
 :::
 
 :::details `docker compose run --rm dev` の中身

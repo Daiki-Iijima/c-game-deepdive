@@ -3,7 +3,11 @@
 # (= ルート Makefile と Makefile.common の二段構成)
 
 CHAPTERS := \
-	01_snake/step1_termios \
+	01_snake/step1_termios/s1_scanf \
+	01_snake/step1_termios/s2_canon \
+	01_snake/step1_termios/s3_echo \
+	01_snake/step1_termios/s4_isig \
+	01_snake/step1_termios/s5_full \
 	01_snake/step2_array \
 	01_snake/step3_linkedlist \
 	02_tetris/step1_heap \

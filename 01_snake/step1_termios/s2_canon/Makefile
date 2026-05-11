@@ -1,7 +1,7 @@
-REPO_ROOT := ../../
+REPO_ROOT := ../../../
 include $(REPO_ROOT)/Makefile.common
 
-TARGET := snake_step1
+TARGET := snake_step1_s2
 SRC    := main.c
 
 .PHONY: all run clean asan
