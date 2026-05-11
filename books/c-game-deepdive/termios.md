@@ -64,20 +64,31 @@ struct termios {
 
 そして本章は **5 ステップ** に分けて段階的に組み上げます。 各 step は独立したディレクトリで `make run` でき、 step 間の **差分 (= 1 ビット落とすだけ)** が「ターミナルから何が剥がれたか」 を直接表しています。
 
-| step | dir | やること | 体感 |
-|------|-----|----------|------|
-| 1/5 | `s1_scanf` | `scanf` で 1 文字読むだけ | Enter 押さないと反応しない (痛い) |
-| 2/5 | `s2_canon` | `ICANON` を OFF | 押した瞬間に届く! でも画面が echo で荒れる |
-| 3/5 | `s3_echo`  | + `ECHO` を OFF | 静か。 自分の write だけが画面に出る |
-| 4/5 | `s4_isig`  | + `ISIG` を OFF | Ctrl-C を自前で扱える支配感 |
-| 5/5 | `s5_full`  | + `atexit` + `sigaction` で復元 | 異常終了でも端末が救われる完成版 |
+| step | dir | 落とすビット | 治った痛み | まだ残る痛み |
+|------|-----|--------------|------------|--------------|
+| 1/5 | `s1_scanf` | (なし。 termios 不使用) | — | Enter 押さないと反応しない |
+| 2/5 | `s2_canon` | `ICANON` | Enter 不要 | 押したキーが画面に echo |
+| 3/5 | `s3_echo`  | + `ECHO`   | 静か | Ctrl-C で死ぬ |
+| 4/5 | `s4_isig`  | + `ISIG`   | Ctrl-C を自前で受けられる | 異常終了で端末が raw 残留 |
+| 5/5 | `s5_full`  | + `IXON`+`ICRNL`+`OPOST` & `atexit`+`sigaction` | 異常終了でも端末が救われる | — |
 
-各 step は前 step の **小さな上乗せ** なので、 困ったら一つ前に戻って `git diff` で比較してください。
+各 step は前 step の **小さな上乗せ** です。 step 間の差分を読みたいときは:
+
+```sh
+diff -u 01_snake/step1_termios/s2_canon/main.c \
+        01_snake/step1_termios/s3_echo/main.c
+# または
+git log --all --oneline -- 01_snake/step1_termios/s3_echo/main.c
+```
+
+困ったら一つ前の step に戻って動かし直してください。
 
 
 ## Step 1/5: scanf の限界を見る
 
 まずは termios を一切触らずに、 「普通に書くとなぜダメか」 を体感します。
+
+**この step のポイント**: `#include <termios.h>` も `tcgetattr` も登場しない。 ふつうの C プログラム。 だからこそ、 何が「ふつう」 で、 何を変えると raw mode になるのか、 が次 step から際立ちます。
 
 ```sh
 cd 01_snake/step1_termios/s1_scanf
@@ -104,6 +115,8 @@ int main(void) {
 キーを 1 つ押しても何も起きず、 **Enter を押した瞬間にまとめて届く** ことを確認してください。 これが ICANON が ON のときの挙動 = カーネル line discipline が「行が完成するまで」 入力を溜め込んでいる状態です。
 
 ゲームで使うには論外。 次の step で `ICANON` を落とします。
+
+→ 次は [Step 2/5: ICANON を OFF にする](#step-25-icanon-を-off-にする)
 
 
 ## Step 2/5: ICANON を OFF にする
@@ -159,6 +172,12 @@ int main(void) {
 
 ゲーム中、 W/A/S/D を連打したら画面が文字で埋まる... これでは話にならないので、 次の step で消します。
 
+→ 次は [Step 3/5: ECHO を OFF にする](#step-35-echo-を-off-にする)
+
+:::message
+**VMIN=1 / VTIME=0 を選んだ理由**: この step は「キーを押すまで待つ」 ことを示したいので、 `read` がブロックする設定 (= 最低 1 byte 来るまで返らない) にしてあります。 Step 5 の完成版では、 **メインループを 60 fps で回す必要があるため `VMIN=0 / VTIME=0` (即時 return)** に変えます。 つまり「同期 read」 → 「ノンブロッキング read」 という遷移も本章のテーマの一つです。
+:::
+
 
 ## Step 3/5: ECHO を OFF にする
 
@@ -194,6 +213,8 @@ make run
 押したキーは **自分の `printf` で書いた `got: ...` 行にしか現れない**。 OS は黙ります。 ここで初めて 「自分の出力だけが見える」 ゲーム的な画面になります。
 
 ただし、 まだ Ctrl-C を押すと SIGINT が飛んでプロセスが死にます。 `ISIG` がまだ ON だから。
+
+→ 次は [Step 4/5: ISIG を OFF にして Ctrl-C を自前で](#step-45-isig-を-off-にして-ctrl-c-を自前で)
 
 
 ## Step 4/5: ISIG を OFF にして Ctrl-C を自前で
@@ -234,6 +255,8 @@ Ctrl-C を押しても **プロセスが死なず、 自分のループが quit 
 ただし、 ここまでで一つ **重大な落とし穴** が残っています。 もしこのプロセスが `kill -9` で殺されたり、 segfault で落ちたりすると、 端末は **raw mode のまま放置** されます。 シェルに戻っても文字が出ない、 Enter が効かない、 という事故です (`reset` で復活はします)。
 
 次の step で塞ぎます。
+
+→ 次は [Step 5/5: atexit + sigaction で端末を救う](#step-55-atexit--sigaction-で端末を救う)
 
 
 ## Step 5/5: atexit + sigaction で端末を救う
@@ -284,7 +307,23 @@ static void enter_raw(void) {
 }
 ```
 
-`s5_full/main.c` には更に **矢印キー (ESC `[` A/B/C/D の 3 byte シーケンス) のパース** と **`@` を動かすメインループ** も載っています。 全文はリポジトリで読んでください。
+そして s5_full では `IXON` (Ctrl-S/Q フロー制御)、 `ICRNL` (CR→LF 変換)、 `OPOST` (出力後処理) も落とし、 さらに `VMIN=0 / VTIME=0` に切り替えています。 これでようやくゲーム的な世界になります:
+
+```c
+raw.c_lflag &= (tcflag_t)~(ICANON | ECHO | ISIG);
+raw.c_iflag &= (tcflag_t)~(IXON | ICRNL);
+raw.c_oflag &= (tcflag_t)~(OPOST);
+raw.c_cc[VMIN]  = 0;   /* 0 byte でも read は即時 return = ノンブロッキング */
+raw.c_cc[VTIME] = 0;
+```
+
+**`VMIN=0` への切り替えが必要な理由**: メインループは「キーが押されなくても画面を 60 fps で描き続ける」 必要があります。 Step 2〜4 のように `VMIN=1` でブロックしてしまうと、 ユーザーが何も押さない間は描画も時間も止まり、 蛇が動かない世界になります。 そこで「入力が無ければ 0 byte で即返ってこい」 と命じるのが `VMIN=0`。
+
+### 矢印キーの正体: ESC `[` `A/B/C/D` の 3 byte
+
+`s5_full/main.c` には **矢印キーのパース処理** が初登場します。 なぜ s2〜s4 では出てこなかったか? — Step 2〜4 はキーを 1 byte ずつ眺める教育用ループで、 押されたバイトをそのまま表示していました。 そこには「矢印キー」 という独立した存在は無く、 ESC `[` `A` の 3 byte が **連続して** 飛んできていただけです (試しに s4 を立ち上げて矢印キーを押すと、 `got: '?' (0x1B)` → `got: '[' (0x5B)` → `got: 'A' (0x41)` の 3 行が一気に出ます)。
+
+Snake で蛇を動かすには、 この 3 byte をひとまとめに「上矢印」 として解釈する必要があります。 それが s5_full の `read_key()` 関数 (本記事末尾の strace ログにも同じパターンが出ます)。
 
 ```sh
 cd 01_snake/step1_termios/s5_full
@@ -295,7 +334,15 @@ make run    # 矢印キーで @ が動く。 q で終了。
 
 
 :::message alert
-**ここで使った `tcsetattr` は、厳密には async-signal-safe ではありません** (POSIX `signal-safety(7)`)。「実用上は端末を救えるので使う」という割り切りで採用しています。**何が安全で何が不安全か** は第 8 章 (Roguelike signal) で正面から扱います。今は「signal ハンドラからは write(2) と低レベル syscall 中心、printf や malloc は呼ばない」を頭の隅に置いてください。
+**ここで使った `tcsetattr` は、 厳密には async-signal-safe ではありません** (POSIX `signal-safety(7)`)。 「実用上は端末を救えるので使う」 という割り切りで採用しています。 **何が安全で何が不安全か** は第 8 章 (Roguelike signal) で正面から扱います。
+
+参考までに、 signal ハンドラから呼んで安全なのは概ね次の関数たち (POSIX.1-2017 列挙):
+
+- ✅ `write(2)`, `read(2)`, `_exit(2)`, `signal(2)`, `raise(3)`, `kill(2)`, `sigaction(2)`, `sigprocmask(2)`
+- ✅ `time(2)`, `clock_gettime(2)` (Linux では安全リストに含まれる)
+- ❌ `printf(3)`, `fprintf(3)`, `malloc(3)`, `free(3)`, `tcsetattr(3)` — **本章はこの ❌ を意図的に踏んでいます**
+
+「signal ハンドラからは `write(2)` 中心、 `printf` や `malloc` は呼ばない」 を頭の隅に置いてください。
 :::
 
 
@@ -320,7 +367,7 @@ strace -e trace=ioctl,read,write ./snake_step1_s5
 - 注意: Docker コンテナ内で使うには `seccomp:unconfined` 権限が要る (本連載の `docker/compose.yml` で許可済み)。
 :::
 
-`tcsetattr` の正体が `ioctl(0, TCSETSF, {...})` であること、`read(0, buf, 1)` が即座に 0 byte を返してくる (= ノンブロッキングが効いている) ことが目で確認できます。
+`tcsetattr` の正体が `ioctl(0, TCSETSF, {...})` であること、 `read(0, buf, 1)` が **即座に 0 byte を返してくる** (= s5_full の `VMIN=0` ノンブロッキングが効いている = 60 fps メインループが回せる) ことが目で確認できます。 もし s2_canon (`VMIN=1`) を strace すると、 ここの `read(0, "", 1) = 0` の行が出ず、 キーを押すまで止まったままになります。
 
 
 ```
