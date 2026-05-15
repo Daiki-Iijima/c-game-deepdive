@@ -28,3 +28,4 @@ vgcore.*
 # zenn-cli
 node_modules/
 .zenn/
+01_snake/step1_termios/s5_full/snake_step1_s5
